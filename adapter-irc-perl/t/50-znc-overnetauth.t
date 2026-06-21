@@ -32,9 +32,20 @@ $config->{no_quote} = 1;
 $command = overnetauth::Core::build_bridge_command($config, $line);
 like $command, qr/--no-quote\z/, 'no_quote can be requested explicitly';
 
-ok overnetauth::Core::contains_auth_prompt($line), 'OVERNETAUTH prompt detected';
+ok overnetauth::Core::contains_auth_prompt(
+  ':server NOTICE alice :OVERNETAUTH CHALLENGE ' . ('a' x 64)
+), 'OVERNETAUTH prompt detected';
+ok overnetauth::Core::contains_auth_prompt(
+  ':server NOTICE alice :OVERNETAUTH DELEGATE ' . ('b' x 64) . ' session-1 ws://127.0.0.1:7448 1782057273'
+), 'OVERNETAUTH delegation prompt detected';
 ok overnetauth::Core::contains_auth_prompt('AUTHENTICATE deadbeef'),
   'bare SASL AUTHENTICATE prompt detected';
+ok !overnetauth::Core::contains_auth_prompt(
+  ':server NOTICE alice :OVERNETAUTH AUTH ' . ('a' x 64)
+), 'OVERNETAUTH success is not treated as a helper prompt';
+ok !overnetauth::Core::contains_auth_prompt(
+  ':server NOTICE alice :OVERNETAUTH DELEGATE is required for authoritative JOIN'
+), 'OVERNETAUTH error is not treated as a helper prompt';
 ok !overnetauth::Core::contains_auth_prompt(':server 001 alice :welcome'),
   'ordinary server line ignored';
 ok overnetauth::Core::is_overnetauth_auth_success(
@@ -59,6 +70,27 @@ my ($helper_output, $status) =
   overnetauth::Core::run_helper_command(q{printf 'OVERNETAUTH AUTH from-helper\n'});
 is $status, 0, 'helper command exits successfully';
 is $helper_output, "OVERNETAUTH AUTH from-helper\n", 'helper command output captured';
+
+($helper_output, $status) =
+  overnetauth::Core::run_helper_command(q{printf 'bad helper\n' >&2; exit 13});
+is overnetauth::Core::status_summary($status), 'exit 13',
+  'helper exit status is summarized';
+is overnetauth::Core::first_helper_diagnostic($helper_output), 'bad helper',
+  'helper stderr is captured for diagnostics';
+
+is_deeply(
+  [
+    overnetauth::Core::config_warnings(
+      { %{ overnetauth::Core::default_config() }, scope => '', no_quote => 1 },
+      'overnetauth',
+    )
+  ],
+  [
+    'scope is required for OVERNETAUTH helper signing',
+    'no_quote=true requires a helper that emits complete raw IRC commands',
+  ],
+  'config warnings catch missing scope and risky no_quote mode',
+);
 
 {
   no warnings qw(once redefine);
@@ -98,6 +130,32 @@ is $helper_output, "OVERNETAUTH AUTH from-helper\n", 'helper command output capt
 
   is $module->OnModCommand('Set'), 1,
     'invalid Set command is still handled';
+}
+
+{
+  no warnings qw(once redefine);
+  local *overnetauth::PutModule = sub {
+    my ($self, $line) = @_;
+    push @{ $self->{test_module_output} }, $line;
+  };
+  local *overnetauth::PutIRC = sub {
+    my ($self, $line) = @_;
+    push @{ $self->{test_irc_output} }, $line;
+  };
+
+  my $module = bless {
+    config => overnetauth::Core::default_config(),
+    mode   => 'overnetauth',
+    debug  => 0,
+  }, 'overnetauth';
+
+  $module->_handle_helper_output("helper exploded\n", 13 << 8);
+  is_deeply $module->{test_irc_output}, undef,
+    'failed helper output is not forwarded upstream';
+  like $module->{test_module_output}[0], qr/\Ahelper failed: exit 13\z/,
+    'helper failure is reported even when debug is off';
+  like $module->{test_module_output}[1], qr/\Ahelper diagnostic: helper exploded\z/,
+    'helper diagnostic is reported';
 }
 
 {

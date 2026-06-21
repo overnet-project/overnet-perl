@@ -109,8 +109,10 @@ sub OnModCommand {
     $self->PutIRC('OVERNETAUTH DELEGATE');
   } elsif ($command eq 'sasl') {
     $self->PutIRC('AUTHENTICATE NOSTR');
+  } elsif ($command eq 'doctor') {
+    $self->_doctor;
   } else {
-    $self->PutModule('Commands: Show, Set, Clear, Challenge, Delegate, SASL');
+    $self->PutModule('Commands: Show, Set, Clear, Challenge, Delegate, SASL, Doctor');
   }
 
   return 1;
@@ -119,8 +121,11 @@ sub OnModCommand {
 sub _handle_helper_output {
   my ($self, $output, $status) = @_;
 
-  if ($status != 0 && $self->{debug}) {
-    $self->PutModule('helper exited with non-zero status');
+  if ($status != 0) {
+    $self->PutModule('helper failed: ' . overnetauth::Core::status_summary($status));
+    my $diagnostic = overnetauth::Core::first_helper_diagnostic($output);
+    $self->PutModule('helper diagnostic: ' . $diagnostic)
+      if length $diagnostic;
   }
 
   my @lines = overnetauth::Core::sanitize_helper_output($output);
@@ -143,6 +148,23 @@ sub _show {
   $self->PutModule('no_quote: ' . ($self->{config}->{no_quote} ? 'true' : 'false'));
   $self->PutModule('auto_delegate: ' . ($self->{config}->{auto_delegate} ? 'true' : 'false'));
   $self->PutModule('debug: ' . ($self->{debug} ? 'true' : 'false'));
+  $self->_show_warnings;
+  return;
+}
+
+sub _doctor {
+  my ($self) = @_;
+
+  $self->_show;
+  $self->PutModule('identity: helper must sign as the IRC account owner');
+  return;
+}
+
+sub _show_warnings {
+  my ($self) = @_;
+
+  my @warnings = overnetauth::Core::config_warnings($self->{config}, $self->{mode});
+  $self->PutModule('warning: ' . $_) for @warnings;
   return;
 }
 
@@ -253,7 +275,8 @@ sub shell_quote {
 sub contains_auth_prompt {
   my ($line) = @_;
   my $trimmed = trim($line);
-  return 1 if index($trimmed, 'OVERNETAUTH ') >= 0;
+  return 1 if $trimmed =~ /\bOVERNETAUTH\s+CHALLENGE\s+[0-9a-f]{64}\b/i;
+  return 1 if $trimmed =~ /\bOVERNETAUTH\s+DELEGATE\s+[0-9a-f]{64}\s+\S+\s+\S+\s+\d+\b/i;
   return 1 if index($trimmed, ' AUTHENTICATE ') >= 0;
   return 1 if $trimmed =~ /\AAUTHENTICATE /;
   return 0;
@@ -282,6 +305,45 @@ sub build_bridge_command {
 sub allowed_client_command {
   my ($line) = @_;
   return $line =~ /\A(?:OVERNETAUTH|AUTHENTICATE) / ? 1 : 0;
+}
+
+sub status_summary {
+  my ($status) = @_;
+  return 'timeout or launch failure' if !defined($status) || $status < 0;
+  my $exit = $status >> 8;
+  my $signal = $status & 127;
+  return "signal $signal" if $signal;
+  return "exit $exit";
+}
+
+sub first_helper_diagnostic {
+  my ($output) = @_;
+
+  for my $line (split /\n/, ($output // '')) {
+    $line = trim($line);
+    $line = trim(substr $line, 7) if index($line, '/quote ') == 0;
+    next unless length $line;
+    next if allowed_client_command($line);
+    $line = substr($line, 0, 200) . '...' if length($line) > 200;
+    return $line;
+  }
+
+  return '';
+}
+
+sub config_warnings {
+  my ($config, $mode) = @_;
+  my @warnings;
+
+  if (($mode || '') =~ /\A(?:overnetauth|both)\z/
+      && !length($config->{scope} // '')) {
+    push @warnings, 'scope is required for OVERNETAUTH helper signing';
+  }
+  if ($config->{no_quote}) {
+    push @warnings, 'no_quote=true requires a helper that emits complete raw IRC commands';
+  }
+
+  return @warnings;
 }
 
 sub sanitize_helper_output {
@@ -313,7 +375,7 @@ sub run_helper_command {
   local $SIG{ALRM} = sub { die "helper timed out\n" };
   my $ok = eval {
     alarm 10;
-    if (open my $pipe, '-|', $command) {
+    if (open my $pipe, '-|', '(' . $command . ') 2>&1') {
       while (defined(my $chunk = <$pipe>)) {
         $output .= $chunk;
         last if length($output) > 65_536;
