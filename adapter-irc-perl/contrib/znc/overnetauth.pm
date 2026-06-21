@@ -37,7 +37,7 @@ sub OnLoad {
   $self->{config}->{scope} = $self->GetNV('scope')
     if $self->_nv_has_value('scope');
   $self->{config}->{no_quote} =
-    overnetauth::Core::parse_bool($self->GetNV('no_quote'), 1);
+    overnetauth::Core::parse_bool($self->GetNV('no_quote'), 0);
   $self->{config}->{auto_delegate} =
     overnetauth::Core::parse_bool($self->GetNV('auto_delegate'), 1);
   $self->{mode} = $self->_nv_has_value('mode') ? $self->GetNV('mode') : 'overnetauth';
@@ -224,7 +224,7 @@ sub default_config {
     helper      => 'overnet-irc-auth.pl',
     helper_args => '',
     scope       => '',
-    no_quote    => 1,
+    no_quote    => 0,
     auto_delegate => 1,
   };
 }

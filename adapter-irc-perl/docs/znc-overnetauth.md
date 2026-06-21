@@ -50,8 +50,9 @@ Useful options:
 - `scope=IRC_SCOPE`: scope passed to the helper for `OVERNETAUTH` prompts.
 - `mode=overnetauth|sasl|both|passive`: what to start when ZNC connects to the
   IRC server. Default: `overnetauth`.
-- `no_quote=true|false`: ask the helper for raw IRC output with `--no-quote`.
-  Default: `true`.
+- `no_quote=true|false`: ask the helper for raw payload output with
+  `--no-quote`. Default: `false`; the module strips paste-oriented `/quote`
+  prefixes itself.
 - `auto_delegate=true|false`: after successful `OVERNETAUTH AUTH`, request an
   authoritative relay delegation for channel writes. Default: `true`.
 - `debug=true|false`: emit short module diagnostics.

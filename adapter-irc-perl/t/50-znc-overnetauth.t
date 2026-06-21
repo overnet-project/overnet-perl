@@ -26,7 +26,11 @@ my $line = ":server NOTICE alice :OVERNETAUTH CHALLENGE abc'def";
 my $command = overnetauth::Core::build_bridge_command($config, $line);
 like $command, qr/'irc:\/\/irc\.example\.test\/overnet'/, 'scope is shell-quoted';
 like $command, qr/abc'\\''def/, 'server line is shell-quoted';
-like $command, qr/--no-quote\z/, 'no_quote is passed by default';
+unlike $command, qr/--no-quote\z/, 'quoted helper output is used by default';
+
+$config->{no_quote} = 1;
+$command = overnetauth::Core::build_bridge_command($config, $line);
+like $command, qr/--no-quote\z/, 'no_quote can be requested explicitly';
 
 ok overnetauth::Core::contains_auth_prompt($line), 'OVERNETAUTH prompt detected';
 ok overnetauth::Core::contains_auth_prompt('AUTHENTICATE deadbeef'),
