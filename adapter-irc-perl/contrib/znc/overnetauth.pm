@@ -23,7 +23,7 @@ sub has_args {
 }
 
 sub args_help_text {
-  'helper=COMMAND helper_args=ARGS scope=IRC_SCOPE mode=overnetauth|sasl|both|passive no_quote=true|false debug=true|false'
+  'helper=COMMAND helper_args=ARGS scope=IRC_SCOPE mode=overnetauth|sasl|both|passive no_quote=true|false auto_delegate=true|false debug=true|false'
 }
 
 sub OnLoad {
@@ -38,6 +38,8 @@ sub OnLoad {
     if $self->_nv_has_value('scope');
   $self->{config}->{no_quote} =
     overnetauth::Core::parse_bool($self->GetNV('no_quote'), 1);
+  $self->{config}->{auto_delegate} =
+    overnetauth::Core::parse_bool($self->GetNV('auto_delegate'), 1);
   $self->{mode} = $self->_nv_has_value('mode') ? $self->GetNV('mode') : 'overnetauth';
   $self->{debug} = overnetauth::Core::parse_bool($self->GetNV('debug'), 0);
 
@@ -74,6 +76,10 @@ sub OnRaw {
       overnetauth::Core::run_helper($self->{config}, $line);
     $self->_handle_helper_output($output, $status);
   }
+  if ($self->{config}->{auto_delegate}
+      && overnetauth::Core::is_overnetauth_auth_success($line)) {
+    $self->PutIRC('OVERNETAUTH DELEGATE');
+  }
 
   return defined $ZNC::CONTINUE ? $ZNC::CONTINUE : 0;
 }
@@ -99,10 +105,12 @@ sub OnModCommand {
     $self->_clear(lc($key // ''));
   } elsif ($command eq 'challenge') {
     $self->PutIRC('OVERNETAUTH CHALLENGE');
+  } elsif ($command eq 'delegate') {
+    $self->PutIRC('OVERNETAUTH DELEGATE');
   } elsif ($command eq 'sasl') {
     $self->PutIRC('AUTHENTICATE NOSTR');
   } else {
-    $self->PutModule('Commands: Show, Set, Clear, Challenge, SASL');
+    $self->PutModule('Commands: Show, Set, Clear, Challenge, Delegate, SASL');
   }
 
   return 1;
@@ -133,6 +141,7 @@ sub _show {
   $self->PutModule('scope: ' . $self->{config}->{scope});
   $self->PutModule('mode: ' . $self->{mode});
   $self->PutModule('no_quote: ' . ($self->{config}->{no_quote} ? 'true' : 'false'));
+  $self->PutModule('auto_delegate: ' . ($self->{config}->{auto_delegate} ? 'true' : 'false'));
   $self->PutModule('debug: ' . ($self->{debug} ? 'true' : 'false'));
   return;
 }
@@ -156,6 +165,8 @@ sub _set_value {
     $self->{mode} = $mode;
   } elsif ($key eq 'no_quote') {
     $self->{config}->{no_quote} = overnetauth::Core::parse_bool($value, 0);
+  } elsif ($key eq 'auto_delegate') {
+    $self->{config}->{auto_delegate} = overnetauth::Core::parse_bool($value, 0);
   } elsif ($key eq 'debug') {
     $self->{debug} = overnetauth::Core::parse_bool($value, 0);
   } else {
@@ -191,6 +202,7 @@ sub _save {
   $self->SetNV('helper_args', $self->{config}->{helper_args});
   $self->SetNV('scope',       $self->{config}->{scope});
   $self->SetNV('no_quote',    $self->{config}->{no_quote} ? 'true' : 'false');
+  $self->SetNV('auto_delegate', $self->{config}->{auto_delegate} ? 'true' : 'false');
   $self->SetNV('mode',        $self->{mode});
   $self->SetNV('debug',       $self->{debug} ? 'true' : 'false');
   return;
@@ -213,6 +225,7 @@ sub default_config {
     helper_args => '',
     scope       => '',
     no_quote    => 1,
+    auto_delegate => 1,
   };
 }
 
@@ -244,6 +257,12 @@ sub contains_auth_prompt {
   return 1 if index($trimmed, ' AUTHENTICATE ') >= 0;
   return 1 if $trimmed =~ /\AAUTHENTICATE /;
   return 0;
+}
+
+sub is_overnetauth_auth_success {
+  my ($line) = @_;
+  my $trimmed = trim($line);
+  return $trimmed =~ /\bOVERNETAUTH\s+AUTH\s+[0-9a-f]{64}\b/i ? 1 : 0;
 }
 
 sub build_bridge_command {

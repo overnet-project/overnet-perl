@@ -52,6 +52,8 @@ Useful options:
   IRC server. Default: `overnetauth`.
 - `no_quote=true|false`: ask the helper for raw IRC output with `--no-quote`.
   Default: `true`.
+- `auto_delegate=true|false`: after successful `OVERNETAUTH AUTH`, request an
+  authoritative relay delegation for channel writes. Default: `true`.
 - `debug=true|false`: emit short module diagnostics.
 
 The same settings can be changed after loading:
@@ -61,6 +63,7 @@ The same settings can be changed after loading:
 /msg *overnetauth Set helper /home/kestrel/projects/overnet/irc-server/bin/overnet-irc-auth.pl
 /msg *overnetauth Set helper_args --pass-entry overnet
 /msg *overnetauth Set mode both
+/msg *overnetauth Set auto_delegate true
 /msg *overnetauth Show
 ```
 
@@ -74,6 +77,15 @@ On connect, the module starts the configured auth flow:
 - `mode=sasl` sends `AUTHENTICATE NOSTR`.
 - `mode=both` sends both.
 - `mode=passive` waits for server prompts.
+
+After a successful `OVERNETAUTH AUTH` response, the module sends
+`OVERNETAUTH DELEGATE` by default. Authoritative hosted channel writes, such as
+creating or joining a NIP-29-backed channel through an authority relay, require
+this delegated signing session. You can also request it manually:
+
+```irc
+/msg *overnetauth Delegate
+```
 
 When the server sends a line containing `OVERNETAUTH` or a SASL
 `AUTHENTICATE` challenge, the module runs:

@@ -33,6 +33,12 @@ ok overnetauth::Core::contains_auth_prompt('AUTHENTICATE deadbeef'),
   'bare SASL AUTHENTICATE prompt detected';
 ok !overnetauth::Core::contains_auth_prompt(':server 001 alice :welcome'),
   'ordinary server line ignored';
+ok overnetauth::Core::is_overnetauth_auth_success(
+  ':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH ' . ('a' x 64)
+), 'OVERNETAUTH AUTH success is detected';
+ok !overnetauth::Core::is_overnetauth_auth_success(
+  ':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH requires a valid signed Nostr event'
+), 'OVERNETAUTH AUTH error is not treated as success';
 
 is_deeply(
   [ overnetauth::Core::sanitize_helper_output(
@@ -81,8 +87,37 @@ is $helper_output, "OVERNETAUTH AUTH from-helper\n", 'helper command output capt
   is $module->{test_irc_output}[0], 'OVERNETAUTH CHALLENGE',
     'Challenge command sends OVERNETAUTH challenge upstream';
 
+  is $module->OnModCommand('Delegate'), 1,
+    'Delegate command is handled';
+  is $module->{test_irc_output}[1], 'OVERNETAUTH DELEGATE',
+    'Delegate command sends OVERNETAUTH delegate request upstream';
+
   is $module->OnModCommand('Set'), 1,
     'invalid Set command is still handled';
+}
+
+{
+  no warnings qw(once redefine);
+  local *overnetauth::PutIRC = sub {
+    my ($self, $line) = @_;
+    push @{ $self->{test_irc_output} }, $line;
+  };
+  local *overnetauth::Core::run_helper = sub {
+    return ('', 0);
+  };
+
+  my $module = bless {
+    config => {
+      %{ overnetauth::Core::default_config() },
+      auto_delegate => 1,
+    },
+    mode   => 'overnetauth',
+    debug  => 0,
+  }, 'overnetauth';
+
+  $module->OnRaw(':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH ' . ('a' x 64));
+  is_deeply $module->{test_irc_output}, [ 'OVERNETAUTH DELEGATE' ],
+    'successful OVERNETAUTH AUTH response requests delegation automatically';
 }
 
 done_testing;
