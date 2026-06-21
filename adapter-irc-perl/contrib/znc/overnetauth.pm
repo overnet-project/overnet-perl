@@ -70,13 +70,16 @@ sub OnIRCConnected {
 sub OnRaw {
   my ($self, $line) = @_;
 
-  if (overnetauth::Core::contains_auth_prompt($line)) {
+  my $prompt_kind = overnetauth::Core::auth_prompt_kind($line);
+  if ($prompt_kind
+      && overnetauth::Core::mode_handles_prompt($self->{mode}, $prompt_kind)) {
     $self->PutModule('running helper for auth prompt') if $self->{debug};
     my ($output, $status) =
       overnetauth::Core::run_helper($self->{config}, $line);
     $self->_handle_helper_output($output, $status);
   }
   if ($self->{config}->{auto_delegate}
+      && overnetauth::Core::mode_handles_prompt($self->{mode}, 'overnetauth')
       && overnetauth::Core::is_overnetauth_auth_success($line)) {
     $self->PutIRC('OVERNETAUTH DELEGATE');
   }
@@ -274,11 +277,27 @@ sub shell_quote {
 
 sub contains_auth_prompt {
   my ($line) = @_;
+  return auth_prompt_kind($line) ? 1 : 0;
+}
+
+sub auth_prompt_kind {
+  my ($line) = @_;
   my $trimmed = trim($line);
-  return 1 if $trimmed =~ /\bOVERNETAUTH\s+CHALLENGE\s+[0-9a-f]{64}\b/i;
-  return 1 if $trimmed =~ /\bOVERNETAUTH\s+DELEGATE\s+[0-9a-f]{64}\s+\S+\s+\S+\s+\d+\b/i;
-  return 1 if index($trimmed, ' AUTHENTICATE ') >= 0;
-  return 1 if $trimmed =~ /\AAUTHENTICATE /;
+  return 'overnetauth'
+    if $trimmed =~ /\bOVERNETAUTH\s+CHALLENGE\s+[0-9a-f]{64}\b/i;
+  return 'overnetauth'
+    if $trimmed =~ /\bOVERNETAUTH\s+DELEGATE\s+[0-9a-f]{64}\s+\S+\s+\S+\s+\d+\b/i;
+  return 'sasl' if index($trimmed, ' AUTHENTICATE ') >= 0;
+  return 'sasl' if $trimmed =~ /\AAUTHENTICATE /;
+  return '';
+}
+
+sub mode_handles_prompt {
+  my ($mode, $kind) = @_;
+  $mode = lc($mode // '');
+  $kind = lc($kind // '');
+  return 1 if $mode eq 'both' && ($kind eq 'overnetauth' || $kind eq 'sasl');
+  return 1 if $mode eq $kind;
   return 0;
 }
 

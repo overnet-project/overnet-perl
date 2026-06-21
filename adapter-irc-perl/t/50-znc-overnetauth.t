@@ -35,11 +35,16 @@ like $command, qr/--no-quote\z/, 'no_quote can be requested explicitly';
 ok overnetauth::Core::contains_auth_prompt(
   ':server NOTICE alice :OVERNETAUTH CHALLENGE ' . ('a' x 64)
 ), 'OVERNETAUTH prompt detected';
+is overnetauth::Core::auth_prompt_kind(
+  ':server NOTICE alice :OVERNETAUTH CHALLENGE ' . ('a' x 64)
+), 'overnetauth', 'OVERNETAUTH prompt kind detected';
 ok overnetauth::Core::contains_auth_prompt(
   ':server NOTICE alice :OVERNETAUTH DELEGATE ' . ('b' x 64) . ' session-1 ws://127.0.0.1:7448 1782057273'
 ), 'OVERNETAUTH delegation prompt detected';
 ok overnetauth::Core::contains_auth_prompt('AUTHENTICATE deadbeef'),
   'bare SASL AUTHENTICATE prompt detected';
+is overnetauth::Core::auth_prompt_kind('AUTHENTICATE deadbeef'), 'sasl',
+  'SASL prompt kind detected';
 ok !overnetauth::Core::contains_auth_prompt(
   ':server NOTICE alice :OVERNETAUTH AUTH ' . ('a' x 64)
 ), 'OVERNETAUTH success is not treated as a helper prompt';
@@ -54,6 +59,12 @@ ok overnetauth::Core::is_overnetauth_auth_success(
 ok !overnetauth::Core::is_overnetauth_auth_success(
   ':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH requires a valid signed Nostr event'
 ), 'OVERNETAUTH AUTH error is not treated as success';
+ok overnetauth::Core::mode_handles_prompt('overnetauth', 'overnetauth'),
+  'overnetauth mode handles overnetauth prompts';
+ok !overnetauth::Core::mode_handles_prompt('sasl', 'overnetauth'),
+  'sasl mode ignores overnetauth prompts';
+ok !overnetauth::Core::mode_handles_prompt('passive', 'overnetauth'),
+  'passive mode ignores overnetauth prompts';
 
 is_deeply(
   [ overnetauth::Core::sanitize_helper_output(
@@ -180,6 +191,58 @@ is_deeply(
   $module->OnRaw(':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH ' . ('a' x 64));
   is_deeply $module->{test_irc_output}, [ 'OVERNETAUTH DELEGATE' ],
     'successful OVERNETAUTH AUTH response requests delegation automatically';
+}
+
+{
+  no warnings qw(once redefine);
+  my $helper_calls = 0;
+  local *overnetauth::PutIRC = sub {
+    my ($self, $line) = @_;
+    push @{ $self->{test_irc_output} }, $line;
+  };
+  local *overnetauth::Core::run_helper = sub {
+    $helper_calls++;
+    return ('OVERNETAUTH AUTH should-not-send', 0);
+  };
+
+  my $module = bless {
+    config => {
+      %{ overnetauth::Core::default_config() },
+      auto_delegate => 1,
+    },
+    mode   => 'passive',
+    debug  => 0,
+  }, 'overnetauth';
+
+  $module->OnRaw(':irc.overnet.local NOTICE alice :OVERNETAUTH CHALLENGE ' . ('a' x 64));
+  $module->OnRaw(':irc.overnet.local NOTICE alice :OVERNETAUTH AUTH ' . ('b' x 64));
+  is $helper_calls, 0,
+    'passive mode does not run the helper for auth prompts';
+  is_deeply $module->{test_irc_output}, undef,
+    'passive mode does not auto-delegate after manual auth';
+}
+
+{
+  no warnings qw(once redefine);
+  my @helper_lines;
+  local *overnetauth::Core::run_helper = sub {
+    my ($config, $line) = @_;
+    push @helper_lines, $line;
+    return ('', 0);
+  };
+
+  my $module = bless {
+    config => overnetauth::Core::default_config(),
+    mode   => 'sasl',
+    debug  => 0,
+  }, 'overnetauth';
+
+  $module->OnRaw(':irc.overnet.local NOTICE alice :OVERNETAUTH CHALLENGE ' . ('a' x 64));
+  $module->OnRaw('AUTHENTICATE deadbeef');
+  is scalar(@helper_lines), 1,
+    'sasl mode only runs helper for SASL prompts';
+  is $helper_lines[0], 'AUTHENTICATE deadbeef',
+    'sasl mode passes SASL prompt to helper';
 }
 
 done_testing;
