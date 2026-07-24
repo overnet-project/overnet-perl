@@ -52,7 +52,11 @@ is(
 
 is(
   $args->{EXE_FILES},
-  ['bin/overnet-relay-backup.pl', 'bin/overnet-relay-service.pl', 'bin/overnet-relay-sync.pl', 'bin/overnet-relay.pl',],
+  [
+    'bin/overnet-authority-relay.pl', 'bin/overnet-relay-backup.pl',
+    'bin/overnet-relay-service.pl',   'bin/overnet-relay-sync.pl',
+    'bin/overnet-relay.pl',
+  ],
   'installable relay scripts are explicit',
 );
 

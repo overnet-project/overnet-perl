@@ -113,4 +113,42 @@ like $readme_text, qr{podman\s+volume\s+inspect\s+\Q$volume_name\E\b}mx,
 unlike $readme_text, qr{systemd-\Q$volume_name\E}mx,
   'README does not reference the systemd- prefixed name VolumeName suppresses';
 
+# --- authority relay: a second flavor served from the same image -------------
+
+my $authority_unit = File::Spec->catfile($podman_dir, 'overnet-authority-relay.container');
+my $authority_vol  = File::Spec->catfile($podman_dir, 'overnet-authority-relay.volume');
+my $authority_bin  = File::Spec->catfile($code_root, 'bin', 'overnet-authority-relay.pl');
+
+ok -f $authority_unit, 'authority relay Quadlet .container unit exists';
+ok -f $authority_vol,  'authority relay Quadlet .volume unit exists';
+ok -f $authority_bin,  'authority relay entrypoint exists';
+
+my $authority_unit_text = _slurp($authority_unit);
+like $authority_unit_text, qr{^Image=localhost/overnet-relay:}mx,
+  'authority relay reuses the generic relay image';
+like $authority_unit_text, qr{^Entrypoint=perl\b}mx,
+  'authority relay overrides the entrypoint to perl';
+like $authority_unit_text, qr{overnet-authority-relay\.pl}mx,
+  'authority relay runs the authority entrypoint script';
+like $authority_unit_text, qr{^Volume=overnet-authority-relay\.volume:/var/lib/overnet/authority-relay:}mx,
+  'authority relay mounts its own store volume by the .volume unit file name';
+like $authority_unit_text, qr{--store-file\s+/var/lib/overnet/authority-relay/}mx,
+  'authority relay keeps its store on the mounted volume';
+like $authority_unit_text, qr{^HealthCmd=}mx,
+  'authority relay defines a health check';
+
+my $authority_vol_text = _slurp($authority_vol);
+like $authority_vol_text, qr{^VolumeName=overnet-authority-relay-store}mx,
+  'authority relay volume unit names its store volume';
+
+# The image entrypoint (overnet-relay-service.pl) and the authority override
+# (overnet-authority-relay.pl) must both exist in the built image; the
+# Containerfile copies the relay tree that contains them.
+like $containerfile_text, qr{COPY\s+relay-perl\b}mx,
+  'Containerfile copies the relay tree that carries both entrypoints';
+
+# The container-build workflow must exercise the authority relay too.
+like $workflow_text, qr{overnet-authority-relay\.container}mx,
+  'workflow smoke-tests the authority relay unit';
+
 done_testing;

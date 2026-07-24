@@ -48,8 +48,14 @@ jobs:
             --tag overnet-relay:ci \
             "$GITHUB_WORKSPACE"
 
-      - name: Smoke-test the relay image
+      - name: Smoke-test the generic relay
         run: relay-perl/deploy/podman/smoke-test.sh overnet-relay:ci
+
+      - name: Smoke-test the authority relay
+        run: |
+          relay-perl/deploy/podman/smoke-test.sh \
+            overnet-relay:ci \
+            relay-perl/deploy/podman/overnet-authority-relay.container
 
       - name: Validate the Quadlet units
         run: relay-perl/deploy/podman/quadlet-check.sh

@@ -5,9 +5,9 @@ use FindBin;
 use Test2::V0;
 
 my @scripts = (
-  'bin/overnet-relay-backup.pl', 'bin/overnet-relay-service.pl',
-  'bin/overnet-relay-sync.pl',   'bin/overnet-relay.pl',
-  'bin/overnet-release-gate.pl',
+  'bin/overnet-authority-relay.pl', 'bin/overnet-relay-backup.pl',
+  'bin/overnet-relay-service.pl',   'bin/overnet-relay-sync.pl',
+  'bin/overnet-relay.pl',           'bin/overnet-release-gate.pl',
 );
 
 plan tests => scalar @scripts;

@@ -1,23 +1,26 @@
 # Overnet relay — podman deployment
 
-This directory packages the generic Overnet relay as a container image and a
-pair of [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
+This directory packages the Overnet relay as a container image plus
+[Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
 units so it can be run and supervised as a rootless `systemd --user` service.
 
-It deploys the **generic relay** — the `overnet-relay-service.pl` entrypoint
-in `bin/`, the same one driven by `deploy/systemd/overnet-relay.service`. It
-serves the Overnet relay protocol (publish, query, subscribe, sync, object
-read) with a persistent on-disk event store. Hosting authoritative NIP-29
-channels is a separate role (its launcher currently lives in the `irc-server`
-repository) and is **not** built by this image.
+One image serves **two relay roles**, selected by which Quadlet unit you install:
+
+- The **generic relay** — the `overnet-relay-service.pl` entrypoint, serving the
+  Overnet relay protocol (publish, query, subscribe, sync, object read) with a
+  persistent on-disk event store.
+- The **authority relay** — the `overnet-authority-relay.pl` entrypoint, an
+  authoritative NIP-29 hosted-channel relay that enforces group membership,
+  moderation, and snapshot authority. This is the relay an IRC server points at
+  (`--authority-relay-url`) to host channels.
 
 ## Contents
 
 | File | Purpose |
 | --- | --- |
 | `Containerfile` | Builds the relay image from sibling `core-perl/` + `relay-perl/` checkouts. |
-| `overnet-relay.container` | Quadlet unit that runs the relay as a `systemd --user` service. |
-| `overnet-relay.volume` | Quadlet unit declaring the named volume for the event store. |
+| `overnet-relay.container` / `overnet-relay.volume` | Quadlet units for the generic relay. |
+| `overnet-authority-relay.container` / `overnet-authority-relay.volume` | Quadlet units for the authority relay (same image, different entrypoint). |
 
 ## Why podman + Quadlet
 
@@ -131,6 +134,33 @@ only from the host. For a public relay, terminate TLS in a reverse proxy in
 front of the loopback listener (recommended), or change `PublishPort` to bind
 a public address directly. Overnet relays speak `ws://`; public deployments
 should be fronted as `wss://`.
+
+## Authority relay (hosted NIP-29 channels)
+
+The `overnet-authority-relay.container` unit runs the **same image** with its
+entrypoint overridden to launch the authority relay. Install it exactly like
+the generic relay:
+
+```bash
+cp relay-perl/deploy/podman/overnet-authority-relay.container \
+   relay-perl/deploy/podman/overnet-authority-relay.volume \
+   ~/.config/containers/systemd/
+systemctl --user daemon-reload
+systemctl --user start overnet-authority-relay
+```
+
+It listens on `127.0.0.1:7448` by default, on its own
+`overnet-authority-relay-store` volume, so it can run alongside a generic relay.
+Two settings on its `Exec=` line matter for correctness:
+
+- `--relay-url` participates in authorization (delegation grants reference it).
+  Set it to the public `wss://` URL that IRC servers and clients actually use.
+- `--snapshot-pubkey <64-hex>` (repeatable) authorizes group-metadata snapshot
+  signers. **By default none is trusted, so every `39xxx` snapshot is rejected**
+  until you add one — this is the safe default, not a misconfiguration.
+
+Point an IRC server at it with `--authority-relay-url ws://<host>:7448` (see
+`irc-server/deploy/podman/`).
 
 ## Updating
 

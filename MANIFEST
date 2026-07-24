@@ -1,4 +1,5 @@
 .gitignore
+bin/overnet-authority-relay.pl
 bin/overnet-relay-backup.pl
 bin/overnet-relay-service.pl
 bin/overnet-relay-sync.pl
@@ -14,6 +15,8 @@ deploy/systemd/overnet-relay-sync@.service
 deploy/systemd/overnet-relay-sync@.timer
 deploy/podman/Containerfile
 deploy/podman/README.md
+deploy/podman/overnet-authority-relay.container
+deploy/podman/overnet-authority-relay.volume
 deploy/podman/overnet-relay.container
 deploy/podman/overnet-relay.volume
 deploy/podman/quadlet-check.sh
@@ -36,6 +39,7 @@ MANIFEST.SKIP
 README.md
 t/authoritative-nip29-relay.pl
 t/authority-hosted-channel-derivation.t
+t/authority-relay-cli.t
 t/bin-syntax.t
 t/client-interop-hooks-disabled.t
 t/client-interop-hooks.t
