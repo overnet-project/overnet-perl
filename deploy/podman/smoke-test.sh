@@ -30,7 +30,9 @@ joined_unit() { perl -0777 -pe 's/\\\n\s*/ /g' "$UNIT"; }
 exec_line="$(joined_unit | sed -n 's/^Exec=//p')"
 health_cmd="$(joined_unit | sed -n 's/^HealthCmd=//p')"
 publish="$(grep -m1 '^PublishPort=' "$UNIT" | cut -d= -f2-)"
-entrypoint="$(grep -m1 '^Entrypoint=' "$UNIT" | cut -d= -f2- || true)"
+# Any extra podman run flags the unit declares (e.g. --entrypoint override).
+# Passing them through keeps this test faithful to the deployed invocation.
+podman_args_line="$(grep -m1 '^PodmanArgs=' "$UNIT" | cut -d= -f2- || true)"
 # The mount target is the second colon-field of the Volume= value
 # (NAME.volume:/container/path[:opts]).
 mount_path="$(grep -m1 '^Volume=' "$UNIT" | cut -d= -f2- | cut -d: -f2)"
@@ -43,8 +45,9 @@ mount_path="$(grep -m1 '^Volume=' "$UNIT" | cut -d= -f2- | cut -d: -f2)"
 # Word-split the Exec value while honouring quoted arguments (e.g. --name "a b").
 mapfile -t run_args < <(printf '%s' "$exec_line" | xargs printf '%s\n')
 
-entrypoint_args=()
-[[ -n "$entrypoint" ]] && entrypoint_args+=(--entrypoint "$entrypoint")
+podman_extra=()
+[[ -n "$podman_args_line" ]] \
+  && mapfile -t podman_extra < <(printf '%s' "$podman_args_line" | xargs printf '%s\n')
 
 port="${publish##*:}"                       # container port = last field
 name="overnet-relay-smoke-$$"
@@ -65,7 +68,7 @@ podman run --detach \
   --name "$name" \
   --publish "$publish" \
   --volume "$volume:$mount_path" \
-  "${entrypoint_args[@]}" \
+  "${podman_extra[@]}" \
   --health-cmd="$health_cmd" \
   "$IMAGE" "${run_args[@]}" >/dev/null
 

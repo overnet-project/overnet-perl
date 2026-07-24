@@ -22,8 +22,10 @@ Wants=network-online.target
 ContainerName=overnet-authority-relay
 Image=localhost/overnet-relay:latest
 
-# Launch the authority relay entrypoint from the shared relay image.
-Entrypoint=perl
+# Launch the authority relay entrypoint from the shared relay image. The
+# entrypoint is overridden via PodmanArgs rather than the Quadlet Entrypoint=
+# key, which only exists in podman 5.0+; PodmanArgs works on older Quadlet too.
+PodmanArgs=--entrypoint=perl
 
 # Persistent event store. The reference must match the sibling unit's file name
 # (overnet-authority-relay.volume); that unit sets

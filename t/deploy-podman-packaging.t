@@ -126,8 +126,8 @@ ok -f $authority_bin,  'authority relay entrypoint exists';
 my $authority_unit_text = _slurp($authority_unit);
 like $authority_unit_text, qr{^Image=localhost/overnet-relay:}mx,
   'authority relay reuses the generic relay image';
-like $authority_unit_text, qr{^Entrypoint=perl\b}mx,
-  'authority relay overrides the entrypoint to perl';
+like $authority_unit_text, qr{^PodmanArgs=--entrypoint=perl\b}mx,
+  'authority relay overrides the entrypoint to perl via PodmanArgs';
 like $authority_unit_text, qr{overnet-authority-relay\.pl}mx,
   'authority relay runs the authority entrypoint script';
 like $authority_unit_text, qr{^Volume=overnet-authority-relay\.volume:/var/lib/overnet/authority-relay:}mx,
