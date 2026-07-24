@@ -75,10 +75,20 @@ echo "smoke-test: relay is listening on 127.0.0.1:$port"
 
 # --- confirm the entrypoint's documented ready state and the health command --
 
-if ! podman logs "$name" 2>&1 | grep -q 'relay.health.*ready'; then
-  echo "smoke-test: relay never reported readiness" >&2
-  exit 1
-fi
+# The listener can accept connections a moment before the entrypoint's ready
+# timer prints its marker, so poll for it rather than checking once.
+ready_deadline=$(( SECONDS + 30 ))
+until podman logs "$name" 2>&1 | grep -q 'relay.health.*ready'; do
+  if [[ "$(podman inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo false)" != true ]]; then
+    echo "smoke-test: container exited before reporting readiness" >&2
+    exit 1
+  fi
+  if (( SECONDS > ready_deadline )); then
+    echo "smoke-test: relay never reported readiness" >&2
+    exit 1
+  fi
+  sleep 1
+done
 echo "smoke-test: relay reported ready"
 
 if ! podman healthcheck run "$name"; then
