@@ -18,11 +18,33 @@ my $containerfile = File::Spec->catfile($podman_dir, 'Containerfile');
 my $container_unit = File::Spec->catfile($podman_dir, 'overnet-relay.container');
 my $volume_unit    = File::Spec->catfile($podman_dir, 'overnet-relay.volume');
 my $readme         = File::Spec->catfile($podman_dir, 'README.md');
+my $smoke_test     = File::Spec->catfile($podman_dir, 'smoke-test.sh');
+my $quadlet_check  = File::Spec->catfile($podman_dir, 'quadlet-check.sh');
+my $workflow = File::Spec->catfile($code_root, '.github', 'workflows', 'container.yml');
 
 ok -f $containerfile,  'Containerfile exists';
 ok -f $container_unit, 'Quadlet .container unit exists';
 ok -f $volume_unit,    'Quadlet .volume unit exists';
 ok -f $readme,         'podman deploy README exists';
+
+# The CI verification (build + smoke run + Quadlet check) must be present and
+# runnable. These assert existence and wiring, not the scripts' contents, so the
+# checks survive edits to how the verification works.
+ok -f $smoke_test && -s $smoke_test,    'smoke-test script exists and is non-empty';
+ok -x $smoke_test,                      'smoke-test script is executable';
+ok -f $quadlet_check && -s $quadlet_check, 'quadlet-check script exists and is non-empty';
+ok -x $quadlet_check,                   'quadlet-check script is executable';
+ok -f $workflow,                        'container-build workflow exists';
+
+my $workflow_text = _slurp($workflow);
+like $workflow_text, qr{podman\s+build}mx,
+  'workflow builds the image';
+like $workflow_text, qr{\bContainerfile\b}mx,
+  'workflow builds from the Containerfile';
+like $workflow_text, qr{smoke-test\.sh}mx,
+  'workflow runs the smoke test';
+like $workflow_text, qr{quadlet-check\.sh}mx,
+  'workflow runs the Quadlet check';
 
 my $containerfile_text = _slurp($containerfile);
 like $containerfile_text, qr{^FROM\s+\S*perl:}mx,

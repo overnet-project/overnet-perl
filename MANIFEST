@@ -16,6 +16,8 @@ deploy/podman/Containerfile
 deploy/podman/README.md
 deploy/podman/overnet-relay.container
 deploy/podman/overnet-relay.volume
+deploy/podman/quadlet-check.sh
+deploy/podman/smoke-test.sh
 deploy/systemd/overnet-relay.env.example
 deploy/systemd/overnet-relay.service
 lib/Overnet/Authority/HostedChannel/Relay.pm
