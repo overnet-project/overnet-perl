@@ -57,8 +57,10 @@ like $containerfile_text, qr{PERL5LIB=\S*core-perl/lib}mx,
   'Containerfile exposes core-perl on PERL5LIB before installing deps';
 like $containerfile_text, qr{--installdeps\b}mx,
   'Containerfile installs CPAN prerequisites';
-like $containerfile_text, qr{\bCryptX\b}mx,
-  'Containerfile pre-installs CryptX so Net::Nostr::Core resolves Schnorr';
+like $containerfile_text, qr{Crypt-PK-ECC-Schnorr}mx,
+  'Containerfile pre-installs the unindexed Schnorr dist Net::Nostr::Core needs';
+like $containerfile_text, qr{\blibgmp-dev\b}mx,
+  'Containerfile installs libgmp-dev for Math::GMPz (a Schnorr dependency)';
 like $containerfile_text, qr{overnet-relay-service\.pl}mx,
   'Containerfile entrypoint runs the relay service wrapper';
 like $containerfile_text, qr{^USER\s+overnet}mx,

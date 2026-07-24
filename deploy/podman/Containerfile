@@ -27,14 +27,17 @@ RUN apt-get update \
   && apt-get install --yes --no-install-recommends \
        build-essential \
        libssl-dev \
+       libgmp-dev \
        zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# CryptX bundles Crypt::PK::ECC::Schnorr, which Net::Nostr::Core requires but
-# which CPAN does not index as its own module. Installing CryptX explicitly
-# first makes that requirement resolvable during --installdeps below, which
-# otherwise bails depending on the order cpanm happens to process prerequisites.
-RUN cpanm --notest CryptX
+# Net::Nostr::Core requires Crypt::PK::ECC::Schnorr. That distribution is on
+# CPAN (author GUL) but is not indexed under its module name, because CryptX
+# owns the Crypt::PK::ECC namespace, so cpanm cannot resolve it by name during
+# --installdeps and bails. Install it explicitly by author path first; doing so
+# also pulls its Math::GMPz (hence libgmp-dev above) and CryptX prerequisites,
+# so the later --installdeps finds the module already present.
+RUN cpanm --notest GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz
 
 WORKDIR /opt/overnet
 COPY core-perl /opt/overnet/core-perl
