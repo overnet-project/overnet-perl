@@ -30,6 +30,12 @@ RUN apt-get update \
        zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
+# CryptX bundles Crypt::PK::ECC::Schnorr, which Net::Nostr::Core requires but
+# which CPAN does not index as its own module. Installing CryptX explicitly
+# first makes that requirement resolvable during --installdeps below, which
+# otherwise bails depending on the order cpanm happens to process prerequisites.
+RUN cpanm --notest CryptX
+
 WORKDIR /opt/overnet
 COPY core-perl /opt/overnet/core-perl
 COPY relay-perl /opt/overnet/relay-perl
