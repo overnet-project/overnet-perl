@@ -73,8 +73,8 @@ like $container_unit_text, qr{^\[Container\]}mx,
   'Quadlet unit declares a [Container] section';
 like $container_unit_text, qr{^Image=}mx,
   'Quadlet unit sets an image';
-like $container_unit_text, qr{^Volume=overnet-relay-store\.volume:}mx,
-  'Quadlet unit mounts the named store volume';
+like $container_unit_text, qr{^Volume=overnet-relay\.volume:}mx,
+  'Quadlet unit mounts the store volume by the .volume unit file name';
 like $container_unit_text, qr{^PublishPort=127\.0\.0\.1:7447:7447}mx,
   'Quadlet unit publishes the listener on loopback by default';
 like $container_unit_text, qr{--store-file\s+/var/lib/overnet/relay/store\.json}mx,
@@ -94,7 +94,7 @@ like $volume_unit_text, qr{^VolumeName=overnet-relay-store}mx,
 # the volume mount must agree, or the store would not persist.
 like $containerfile_text, qr{/var/lib/overnet/relay}mx,
   'Containerfile store path matches the mounted volume path';
-like $container_unit_text, qr{Volume=overnet-relay-store\.volume:/var/lib/overnet/relay:}mx,
+like $container_unit_text, qr{Volume=overnet-relay\.volume:/var/lib/overnet/relay:}mx,
   'Quadlet mount path matches the configured store path';
 
 my $readme_text = _slurp($readme);

@@ -33,15 +33,29 @@ output="$(XDG_CONFIG_HOME="$workdir" "$quadlet" -dryrun -user 2>&1 || true)"
 printf '%s\n' "$output"
 
 status=0
-if ! grep -q 'overnet-relay' <<<"$output"; then
-  echo "quadlet-check: units did not convert to any service" >&2
+
+# The .container unit must convert to a runnable podman service. Asserting the
+# generated ExecStart exists is a positive success signal: a unit that failed to
+# convert produces no ExecStart at all.
+if ! grep -qE 'ExecStart=.*podman .*overnet-relay' <<<"$output"; then
+  echo "quadlet-check: the .container unit did not convert to a podman service" >&2
   status=1
 fi
-# Quadlet prints conversion failures as `converting "X": ...` and warnings that
-# name the offending key; treat any of those as a hard failure.
-if grep -qiE 'converting "|error|invalid|unsupported|failed to' <<<"$output"; then
-  echo "quadlet-check: the generator reported a problem with a unit" >&2
-  status=1
+
+# The mount must resolve to the volume unit's declared VolumeName. If the
+# .container's Volume= reference does not match the .volume unit's file name,
+# Quadlet silently falls back to a `systemd-<name>` volume instead of linking
+# the unit -- guard against that regression by reading the name from the unit.
+volname="$(sed -n 's/^VolumeName=//p' "$HERE"/*.volume | head -n1)"
+if [[ -n "$volname" ]]; then
+  if ! grep -q "${volname}:/var/lib/overnet/relay" <<<"$output"; then
+    echo "quadlet-check: mount does not use the declared volume name ($volname)" >&2
+    status=1
+  fi
+  if grep -q "systemd-${volname}:" <<<"$output"; then
+    echo "quadlet-check: Volume= reference did not resolve to the .volume unit (fell back to systemd-$volname)" >&2
+    status=1
+  fi
 fi
 
 if [[ $status -eq 0 ]]; then

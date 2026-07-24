@@ -4,7 +4,7 @@
 # (rootless: ~/.config/containers/systemd/). Because VolumeName is set below,
 # the created podman volume is named `overnet-relay-store` verbatim (without
 # the systemd- prefix Quadlet would add by default). The .container unit
-# references this unit by its unit name (overnet-relay-store.volume).
+# references this unit by its file name (overnet-relay.volume).
 [Unit]
 Description=Overnet relay event store volume
 

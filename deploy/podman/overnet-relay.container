@@ -20,9 +20,11 @@ Wants=network-online.target
 ContainerName=overnet-relay
 Image=localhost/overnet-relay:latest
 
-# Persistent event store. The named volume is declared by the sibling
-# overnet-relay.volume unit; the mount path matches --store-file below.
-Volume=overnet-relay-store.volume:/var/lib/overnet/relay:Z
+# Persistent event store. The reference must match the sibling unit's file
+# name (overnet-relay.volume); that unit sets VolumeName=overnet-relay-store,
+# so the actual podman volume is named overnet-relay-store. The mount path
+# matches --store-file below.
+Volume=overnet-relay.volume:/var/lib/overnet/relay:Z
 
 # Publish the WebSocket listener on loopback only. Front it with a
 # TLS-terminating reverse proxy for public exposure, or change the bind
