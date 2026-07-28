@@ -12,11 +12,12 @@ use lib grep { -d $_ } ("$FindBin::Bin/../lib", "$FindBin::Bin/../../core-perl/l
 use Overnet::Authority::HostedChannel::Relay qw(build_authoritative_relay);
 
 my %opt = (
-  host       => '127.0.0.1',
-  port       => 7448,
-  grant_kind => 14142,
-  relay_url  => undef,
-  store_file => undef,
+  host               => '127.0.0.1',
+  port               => 7448,
+  grant_kind         => 14142,
+  relay_url          => undef,
+  store_file         => undef,
+  max_content_events => undef,
 );
 
 my $help = 0;
@@ -27,15 +28,16 @@ my $health_file;
 my $log_file;
 
 GetOptions(
-  'host=s'            => \$host,
-  'port=i'            => \$port,
-  'relay-url=s'       => \$opt{relay_url},
-  'grant-kind=i'      => \$opt{grant_kind},
-  'store-file=s'      => \$opt{store_file},
-  'snapshot-pubkey=s' => \@snapshot_pubkeys,
-  'health-file=s'     => \$health_file,
-  'log-file=s'        => \$log_file,
-  'help'              => \$help,
+  'host=s'               => \$host,
+  'port=i'               => \$port,
+  'relay-url=s'          => \$opt{relay_url},
+  'grant-kind=i'         => \$opt{grant_kind},
+  'store-file=s'         => \$opt{store_file},
+  'max-content-events=i' => \$opt{max_content_events},
+  'snapshot-pubkey=s'    => \@snapshot_pubkeys,
+  'health-file=s'        => \$health_file,
+  'log-file=s'           => \$log_file,
+  'help'                 => \$help,
 ) or die _usage();
 
 if ($help) {
@@ -81,7 +83,8 @@ my $relay = build_authoritative_relay(
   relay_url        => $relay_url,
   grant_kind       => 0 + $opt{grant_kind},
   snapshot_pubkeys => \@snapshot_pubkeys,
-  (defined $opt{store_file} ? (store_file => $opt{store_file}) : ()),
+  (defined $opt{store_file}         ? (store_file         => $opt{store_file})         : ()),
+  (defined $opt{max_content_events} ? (max_content_events => $opt{max_content_events}) : ()),
 );
 
 my $shutdown = sub {
@@ -180,6 +183,8 @@ Usage: overnet-authority-relay.pl [options]
   --relay-url URL
   --grant-kind KIND
   --store-file PATH
+  --max-content-events N     bound retained non-authoritative events (never evicts
+                             group state, snapshots, or delegation grants)
   --snapshot-pubkey PUBKEY   (repeatable; without it all 39xxx snapshots are rejected)
   --health-file PATH
   --log-file PATH

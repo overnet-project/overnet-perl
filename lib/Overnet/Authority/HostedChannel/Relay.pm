@@ -44,8 +44,14 @@ sub build_authoritative_relay {
   }
   my $snapshot_signers = _snapshot_signer_set($args{snapshot_pubkeys});
 
+  if (defined $args{max_content_events}
+    && (ref($args{max_content_events}) || $args{max_content_events} !~ /\A[1-9]\d*\z/mxs)) {
+    croak 'max_content_events must be a positive integer';
+  }
+
   my $relay;
   my %retained_grants;
+  my @retained_content;
   my %relay_args = (
     relay_url => $args{relay_url},
     on_event  => sub {
@@ -53,6 +59,13 @@ sub build_authoritative_relay {
       if ($event->kind == 0 + $args{grant_kind}) {
         _retain_grant(\%retained_grants, $event);
       }
+      _retain_content(
+        relay              => $relay,
+        retained_content   => \@retained_content,
+        max_content_events => $args{max_content_events},
+        grant_kind         => 0 + $args{grant_kind},
+        event              => $event,
+      );
       return _authorize_event(
         relay            => $relay,
         relay_url        => $args{relay_url},
@@ -244,6 +257,54 @@ sub _delegated_context {
     actor_pubkey     => $actor_pubkey,
     authority_id     => $authority_id,
   };
+}
+
+# True for any event authorization reads, and so for any event that must never
+# be evicted: the group events state is derived from, the snapshots, and the
+# delegation grants control events are resolved against.
+sub _is_authoritative_kind {
+  my ($kind, $grant_kind) = @_;
+  return 1 if $GROUP_EVENT_KIND{$kind};
+  return 1 if $GROUP_SNAPSHOT_KIND{$kind};
+  return 1 if defined $grant_kind && $kind == $grant_kind;
+  return 0;
+}
+
+# Bound how much non-authoritative traffic the relay keeps.
+#
+# An authority relay retained everything it ever accepted: a two-hour soak saw
+# resident memory rise from 49MB to 124MB, linearly, with no plateau. Unbounded,
+# the process grows until it is killed.
+#
+# Only content is evicted. Evicting an event authorization reads would silently
+# destroy derived group state -- membership, operator rights, or the group's
+# existence -- turning ordinary chat volume into an authority outage, which is
+# precisely what tombstone-squat attacks try to manufacture. So the eviction
+# queue only ever receives kinds _is_authoritative_kind rejects, and eviction
+# can therefore never change any authorization decision.
+#
+# The queue holds ids, not events, and evicts by id, so it stays O(1) per event
+# and never walks the store.
+sub _retain_content {
+  my (%args) = @_;
+  my $max = $args{max_content_events};
+  return 0 if !defined $max;
+  return 0 if _is_authoritative_kind($args{event}->kind, $args{grant_kind});
+
+  my $retained = $args{retained_content};
+  push @{$retained}, $args{event}->id;
+
+  # One over the budget is correct here: this runs before the relay stores the
+  # event being authorized, so evicting down to $max now leaves $max once it
+  # lands.
+  while (@{$retained} > $max) {
+    my $evicted = shift @{$retained};
+    if ($args{relay} && $args{relay}->store) {
+      $args{relay}->store->delete_by_id($evicted);
+    }
+  }
+
+  return 1;
 }
 
 sub _retain_grant {
