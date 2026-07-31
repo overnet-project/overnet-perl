@@ -1113,7 +1113,20 @@ Supported NIP list accessor.
 
 =head2 retention_seconds
 
-Retention limit accessor.
+Accessor for the retention window this relay B<advertises> in its NIP-11 info
+document.
+
+This relay does not enforce it. Nothing here expires, prunes, or evicts an event
+because of its age, so setting this declares an operator policy enforced
+somewhere else -- an external sweep, a storage-layer TTL, or a deployment that
+simply discards the store periodically. Set it only when such a policy really
+exists: core.md section on retention requires that retention-related outcomes
+exposed to clients be represented meaningfully, and a client reading this value
+will believe events older than the window are gone.
+
+For a bound this relay does enforce, see C<max_content_events> in
+L<Overnet::Authority::HostedChannel::Relay>, which caps retained
+non-authoritative events and never evicts anything authorization reads.
 
 =head2 max_negentropy_sessions
 
