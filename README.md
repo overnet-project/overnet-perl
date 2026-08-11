@@ -37,6 +37,15 @@ The adapter currently produces unsigned Overnet event drafts from IRC inputs.
 
 The current design goal is fidelity to IRC semantics first. Observed IRC actions are preserved as adapted events and are not automatically treated as native Overnet authority or derived canonical state.
 
+## Internal Design
+
+`Overnet::Adapter::IRC` is the stable adapter facade and owns only session
+lifecycle and operation dispatch. Standard IRC input mapping lives in
+`InputMapper`, observed membership projection lives in `Presence`, and all
+NIP-29 event mapping, state reconstruction, admission, and permission behavior
+lives in `NIP29`. The collaborators share only the validation primitives in the
+private `Role::Validation` role.
+
 ## Development
 
 Run tests with:

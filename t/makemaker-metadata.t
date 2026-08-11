@@ -59,6 +59,7 @@ is(
       ' ',
       qw(
         t/00-load.t
+        t/component-boundaries.t
         t/input-validation.t
         t/30-nip29-authoritative.t
         t/makemaker-metadata.t
