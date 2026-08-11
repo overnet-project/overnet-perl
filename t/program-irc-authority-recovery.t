@@ -228,7 +228,8 @@ sub _put_user_event {
 subtest
   'refresh preserves cached authoritative events across stale relay snapshots and merges new events after reconnect' =>
   sub {
-  my $server = Local::RecoveryCoordinatorServer->new;
+  my $server      = Local::RecoveryCoordinatorServer->new;
+  my $coordinator = Overnet::Program::IRC::Authority::Coordinator->new(server => $server,);
 
   $server->set_channel_events(
     '#ops',
@@ -248,8 +249,7 @@ subtest
     ]
   );
 
-  Overnet::Program::IRC::Authority::Coordinator::refresh_authoritative_nip29_channel_cache($server, '#ops',
-    refresh => 1,);
+  $coordinator->refresh_authoritative_nip29_channel_cache('#ops', refresh => 1,);
   is(
     $server->{authoritative_channel_cache}{'#ops'}{view}{event_ids},
     ['m1', 'u1'],
@@ -257,8 +257,7 @@ subtest
   );
 
   $server->set_channel_events('#ops', []);
-  Overnet::Program::IRC::Authority::Coordinator::refresh_authoritative_nip29_channel_cache($server, '#ops',
-    refresh => 1,);
+  $coordinator->refresh_authoritative_nip29_channel_cache('#ops', refresh => 1,);
   is(
     $server->{authoritative_channel_cache}{'#ops'}{view}{event_ids},
     ['m1', 'u1'],
@@ -283,8 +282,7 @@ subtest
       ),
     ]
   );
-  Overnet::Program::IRC::Authority::Coordinator::refresh_authoritative_nip29_channel_cache($server, '#ops',
-    refresh => 1,);
+  $coordinator->refresh_authoritative_nip29_channel_cache('#ops', refresh => 1,);
   is(
     $server->{authoritative_channel_cache}{'#ops'}{view}{event_ids},
     ['m1', 'u1', 'm2'],
@@ -298,11 +296,11 @@ subtest
 
 subtest 'out-of-order discovery replay keeps tombstones authoritative' => sub {
   my $server          = Local::RecoveryCoordinatorServer->new;
-  my $subscription_id = Overnet::Program::IRC::Authority::Coordinator::authoritative_discovery_subscription_id($server);
+  my $coordinator     = Overnet::Program::IRC::Authority::Coordinator->new(server => $server,);
+  my $subscription_id = $coordinator->authoritative_discovery_subscription_id;
   $server->{authoritative_discovery_subscription_id} = $subscription_id;
 
-  Overnet::Program::IRC::Authority::Coordinator::handle_subscription_event(
-    $server,
+  $coordinator->handle_subscription_event(
     {
       subscription_id => $subscription_id,
       item_type       => 'nostr.event',
@@ -315,8 +313,7 @@ subtest 'out-of-order discovery replay keeps tombstones authoritative' => sub {
       ),
     },
   );
-  Overnet::Program::IRC::Authority::Coordinator::handle_subscription_event(
-    $server,
+  $coordinator->handle_subscription_event(
     {
       subscription_id => $subscription_id,
       item_type       => 'nostr.event',
@@ -336,7 +333,8 @@ subtest 'out-of-order discovery replay keeps tombstones authoritative' => sub {
 };
 
 subtest 'restart recovery rebuilds discovered channels from relay snapshots' => sub {
-  my $server = Local::RecoveryCoordinatorServer->new;
+  my $server      = Local::RecoveryCoordinatorServer->new;
+  my $coordinator = Overnet::Program::IRC::Authority::Coordinator->new(server => $server,);
   $server->set_channel_events(
     '#ops',
     [
@@ -349,7 +347,7 @@ subtest 'restart recovery rebuilds discovered channels from relay snapshots' => 
     ]
   );
 
-  Overnet::Program::IRC::Authority::Coordinator::refresh_authoritative_discovery_cache($server, refresh => 1,);
+  $coordinator->refresh_authoritative_discovery_cache(refresh => 1,);
   ok(exists($server->{authoritative_discovered_channels}{'#ops'}), 'discovery cache is populated before restart',);
 
   delete $server->{authoritative_discovered_channels};
@@ -357,7 +355,7 @@ subtest 'restart recovery rebuilds discovered channels from relay snapshots' => 
   delete $server->{authoritative_discovery_subscription_id};
   $server->{_subscriptions} = {};
 
-  Overnet::Program::IRC::Authority::Coordinator::refresh_authoritative_discovery_cache($server, refresh => 1,);
+  $coordinator->refresh_authoritative_discovery_cache(refresh => 1,);
   ok(
     exists($server->{authoritative_discovered_channels}{'#ops'}),
     'restart recovery rebuilds discovery state from the relay snapshot',

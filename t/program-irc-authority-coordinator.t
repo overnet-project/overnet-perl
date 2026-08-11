@@ -87,16 +87,17 @@ for my $method (
   }
 }
 
-my $mock = Local::MockAuthorityCoordinatorServer->new;
+my $mock        = Local::MockAuthorityCoordinatorServer->new;
+my $coordinator = Overnet::Program::IRC::Authority::Coordinator->new(server => $mock,);
 
 is(
-  Overnet::Program::IRC::Authority::Coordinator::authoritative_grant_subscription_id($mock),
+  $coordinator->authoritative_grant_subscription_id,
   'irc.authority.grants:example.test',
   'coordinator derives the grant subscription id from the network',
 );
 
 is(
-  [Overnet::Program::IRC::Authority::Coordinator::authoritative_channel_subscription_ids($mock, '#ops',)],
+  [$coordinator->authoritative_channel_subscription_ids('#ops')],
   [
     'irc.authority.meta:example.test:groups.example.test:ops',
     'irc.authority.control:example.test:groups.example.test:ops',
@@ -106,11 +107,8 @@ is(
 
 $mock->{called} = [];
 is(
-  Overnet::Program::IRC::Authority::Coordinator::load_authoritative_nip29_events(
-    $mock, '#ops', refresh => 1,
-  ),
-  [],
-  'forced authoritative channel reads use direct relay queries',
+  $coordinator->load_authoritative_nip29_events('#ops', refresh => 1,),
+  [], 'forced authoritative channel reads use direct relay queries',
 );
 is(
   [map { $_->{method} } @{$mock->called}],
@@ -120,7 +118,7 @@ is(
 
 $mock->{called} = [];
 is(
-  Overnet::Program::IRC::Authority::Coordinator::ensure_authoritative_grant_subscription($mock),
+  $coordinator->ensure_authoritative_grant_subscription,
   'irc.authority.grants:example.test',
   'coordinator opens the authoritative grant subscription',
 );
@@ -154,20 +152,22 @@ close $server_fh;
 
 like $server_source, qr/use\ Overnet::Program::IRC::Authority::Coordinator;/mx,
   'Server.pm loads the authority coordinator module';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::ensure_authoritative_grant_subscription/mx,
-  'Server.pm delegates authoritative grant subscriptions to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::ensure_authoritative_discovery_subscription/mx,
-  'Server.pm delegates authoritative discovery subscriptions to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::ensure_authoritative_channel_subscription/mx,
-  'Server.pm delegates authoritative channel subscriptions to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::read_authoritative_nip29_events/mx,
-  'Server.pm delegates authoritative event reads to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::read_authoritative_grant_events/mx,
-  'Server.pm delegates authoritative grant reads to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::publish_authoritative_nip29_event/mx,
-  'Server.pm delegates authoritative relay publishes to the coordinator';
-like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator::handle_subscription_event/mx,
-  'Server.pm delegates runtime subscription events to the coordinator';
+like $server_source, qr/has\ _authority_coordinator\ =>/mx, 'Server.pm owns one authority coordinator collaborator';
+like $server_source, qr/Overnet::Program::IRC::Authority::Coordinator->new\(server\ =>\ \$self/mx,
+  'Server.pm constructs the authority coordinator with a weak server dependency';
+for my $method (
+  qw(
+  ensure_authoritative_grant_subscription
+  ensure_authoritative_discovery_subscription
+  ensure_authoritative_channel_subscription
+  read_authoritative_nip29_events
+  read_authoritative_grant_events
+  publish_authoritative_nip29_event
+  handle_subscription_event
+  )
+) {
+  like $server_source, qr/=>\s*'\Q$method\E'/mx, "Server.pm delegates $method to the coordinator collaborator";
+}
 unlike $server_source, qr/method\ =>\ 'nostr\.open_subscription'/mx,
   'Server.pm no longer embeds raw nostr.open_subscription calls';
 unlike $server_source, qr/method\ =>\ 'nostr\.read_subscription_snapshot'/mx,
