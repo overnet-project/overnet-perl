@@ -1,0 +1,61 @@
+name: container-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/container.yml'
+      - 'deploy/podman/**'
+      - 'bin/**'
+      - 'lib/**'
+      - 'Makefile.PL'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/container.yml'
+      - 'deploy/podman/**'
+      - 'bin/**'
+      - 'lib/**'
+      - 'Makefile.PL'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: Build and smoke-test the relay image
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: relay-perl
+
+      # Overnet core is used from its sibling source tree, so it must be present
+      # in the build context alongside relay-perl.
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/core-perl
+          path: core-perl
+
+      - name: Podman version
+        run: podman version
+
+      - name: Build the relay image
+        run: |
+          podman build \
+            --file relay-perl/deploy/podman/Containerfile \
+            --tag overnet-relay:ci \
+            "$GITHUB_WORKSPACE"
+
+      - name: Smoke-test the generic relay
+        run: relay-perl/deploy/podman/smoke-test.sh overnet-relay:ci
+
+      - name: Smoke-test the authority relay
+        run: |
+          relay-perl/deploy/podman/smoke-test.sh \
+            overnet-relay:ci \
+            relay-perl/deploy/podman/overnet-authority-relay.container
+
+      - name: Validate the Quadlet units
+        run: relay-perl/deploy/podman/quadlet-check.sh

@@ -1,0 +1,71 @@
+# Overnet relay container image (rootless podman friendly).
+#
+# The relay entrypoint resolves the Overnet core library from a sibling
+# checkout at ../../core-perl/lib relative to bin/. Overnet core is not
+# published to CPAN, so it is used directly from its source tree rather than
+# installed as a distribution. The build context must therefore contain both
+# `core-perl/` and `relay-perl/` as sibling directories, exactly as they are
+# laid out in a normal Overnet workspace.
+#
+# Build (run from the workspace directory that holds both checkouts):
+#
+#   podman build \
+#     --file relay-perl/deploy/podman/Containerfile \
+#     --tag overnet-relay:latest \
+#     .
+#
+FROM docker.io/library/perl:5.40-slim
+
+# Overnet core is consumed from its source tree, so it must be visible on
+# @INC before cpanm resolves the relay's `Overnet` prerequisite; otherwise
+# cpanm would try (and fail) to fetch it from CPAN.
+ENV OVERNET_ROOT=/opt/overnet
+ENV PERL5LIB=/opt/overnet/core-perl/lib
+
+# Toolchain for XS prerequisites (CryptX, IO::Socket::SSL, ...).
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends \
+       build-essential \
+       libssl-dev \
+       libgmp-dev \
+       zlib1g-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Net::Nostr::Core requires Crypt::PK::ECC::Schnorr. That distribution is on
+# CPAN (author GUL) but is not indexed under its module name, because CryptX
+# owns the Crypt::PK::ECC namespace, so cpanm cannot resolve it by name during
+# --installdeps and bails. Install it explicitly by author path first; doing so
+# also pulls its Math::GMPz (hence libgmp-dev above) and CryptX prerequisites,
+# so the later --installdeps finds the module already present.
+RUN cpanm --notest GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz
+
+WORKDIR /opt/overnet
+COPY core-perl /opt/overnet/core-perl
+COPY relay-perl /opt/overnet/relay-perl
+
+RUN cpanm --notest --installdeps /opt/overnet/core-perl \
+  && cpanm --notest --installdeps /opt/overnet/relay-perl \
+  && rm -rf /root/.cpanm
+
+# Run as an unprivileged in-container account, matching the rootless model,
+# and pre-create the store directory owned by that account.
+RUN useradd --create-home --uid 10001 overnet \
+  && mkdir -p /var/lib/overnet/relay \
+  && chown -R overnet:overnet /var/lib/overnet
+USER overnet
+
+# Persistent event store lives on a mounted volume.
+VOLUME /var/lib/overnet/relay
+
+# WebSocket listener inside the container network namespace. Host exposure is
+# controlled separately (PublishPort in the Quadlet unit).
+EXPOSE 7447
+
+# The image runs the generic Overnet relay service wrapper. Runtime arguments
+# are supplied by the Quadlet unit's Exec= line (or `podman run` arguments);
+# the defaults below make a bare `podman run overnet-relay` usable.
+ENTRYPOINT ["perl", "/opt/overnet/relay-perl/bin/overnet-relay-service.pl"]
+CMD ["--host", "0.0.0.0", \
+     "--port", "7447", \
+     "--store-file", "/var/lib/overnet/relay/store.json", \
+     "--health-file", "/var/lib/overnet/relay/health.json"]
