@@ -1,8 +1,8 @@
 # overnet-perl-style
 
-Shared [Perl::Critic](https://metacpan.org/pod/Perl::Critic), [Perl::Tidy](https://metacpan.org/pod/Perl::Tidy), author tests, hooks, and CI tooling for Overnet Perl repositories.
+Shared [Perl::Critic](https://metacpan.org/pod/Perl::Critic), [Perl::Tidy](https://metacpan.org/pod/Perl::Tidy), author tests, hooks, and CI tooling for Overnet Perl distributions.
 
-This keeps the separate Overnet Perl codebases on the same style and quality contract.
+This keeps the Overnet Perl distributions on the same style and quality contract.
 
 ## Layout
 

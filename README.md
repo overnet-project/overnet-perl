@@ -17,16 +17,18 @@ authoritative protocol specification remains in the separate
 
 ## Development
 
-All component commands are run from this repository root through the shared
-project Perl:
+The machine-local root `.plx` layout selects the shared project Perl and source
+libraries. Because component directories no longer contain nested Git
+repositories, `plx` can discover that layout from any distribution directory.
+Run each distribution's tests from its own root so relative test paths behave
+the same way they do in CI:
 
 ```bash
-plx prove -r core-perl/t/
-plx prove -r relay-perl/t/
-plx prove -r adapter-irc-perl/t/
-plx prove -r overnet-burner/t/
-plx prove -r overnet-perl-style/t/
+cd core-perl && plx prove -r t/ xt/author/
+cd ../relay-perl && plx prove -r t/ xt/author/
+cd ../adapter-irc-perl && plx prove -r t/ xt/author/
+cd ../overnet-burner && plx prove -r t/ xt/author/
+cd ../overnet-perl-style && plx prove -r t/ xt/author/
 ```
 
 Read the root and component `AGENTS.md` files before changing a component.
-

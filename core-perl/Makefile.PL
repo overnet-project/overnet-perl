@@ -76,8 +76,8 @@ WriteMakefile(
   },
   META_MERGE => {
     resources => {
-      repository => 'https://github.com/overnet-project/core-perl',
-      bugtracker => 'https://github.com/overnet-project/core-perl/issues',
+      repository => 'https://github.com/overnet-project/overnet-perl',
+      bugtracker => 'https://github.com/overnet-project/overnet-perl/issues',
     },
   },
 );

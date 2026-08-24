@@ -99,7 +99,7 @@ The implementation is currently narrow on purpose:
 
 Keep the implementation aligned with the currently specified core. Do not implement speculative profile or adapter behavior unless it has a clear normative home in the spec.
 
-Relay daemons, relay persistence/sync, deploy packaging, and the relay-heavy IRC gate live in the [relay Perl repository](https://github.com/overnet-project/relay-perl).
+Relay daemons, relay persistence/sync, deploy packaging, and the relay-heavy IRC gate live in the [`relay-perl` distribution](https://github.com/overnet-project/overnet-perl/tree/main/relay-perl).
 
 ### Internal Dispatch Architecture
 

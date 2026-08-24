@@ -193,7 +193,7 @@ None known.
 
 The authority models a single scope with a single owner; multi-scope and
 ownership-transfer semantics are out of scope for this reference profile. Report
-issues at L<https://github.com/overnet-project/overnet-burner/issues>.
+issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

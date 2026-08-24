@@ -20,7 +20,7 @@ my $volume_unit    = File::Spec->catfile($podman_dir, 'overnet-relay.volume');
 my $readme         = File::Spec->catfile($podman_dir, 'README.md');
 my $smoke_test     = File::Spec->catfile($podman_dir, 'smoke-test.sh');
 my $quadlet_check  = File::Spec->catfile($podman_dir, 'quadlet-check.sh');
-my $workflow = File::Spec->catfile($code_root, '.github', 'workflows', 'container.yml');
+my $workflow = File::Spec->catfile($code_root, '..', '.github', 'workflows', 'relay-container.yml');
 
 ok -f $containerfile,  'Containerfile exists';
 ok -f $container_unit, 'Quadlet .container unit exists';

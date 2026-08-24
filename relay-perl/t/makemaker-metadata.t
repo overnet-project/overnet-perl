@@ -64,8 +64,8 @@ is(
   $args->{META_MERGE},
   {
     resources => {
-      repository => 'https://github.com/overnet-project/relay-perl',
-      bugtracker => 'https://github.com/overnet-project/relay-perl/issues',
+      repository => 'https://github.com/overnet-project/overnet-perl',
+      bugtracker => 'https://github.com/overnet-project/overnet-perl/issues',
     },
   },
   'metadata resources point at the public repo',

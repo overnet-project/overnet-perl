@@ -1,22 +1,18 @@
-name: container-build
+name: relay container
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/container.yml'
-      - 'deploy/podman/**'
-      - 'bin/**'
-      - 'lib/**'
-      - 'Makefile.PL'
+      - '.github/workflows/relay-container.yml'
+      - 'core-perl/**'
+      - 'relay-perl/**'
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/container.yml'
-      - 'deploy/podman/**'
-      - 'bin/**'
-      - 'lib/**'
-      - 'Makefile.PL'
+      - '.github/workflows/relay-container.yml'
+      - 'core-perl/**'
+      - 'relay-perl/**'
 
 permissions:
   contents: read
@@ -28,15 +24,6 @@ jobs:
     name: Build and smoke-test the relay image
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: relay-perl
-
-      # Overnet core is used from its sibling source tree, so it must be present
-      # in the build context alongside relay-perl.
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
 
       - name: Podman version
         run: podman version

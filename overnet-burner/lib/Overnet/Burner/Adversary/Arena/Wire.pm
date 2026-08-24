@@ -153,7 +153,7 @@ None known.
 Does not support non-persisting capability probes, and does not reset remote
 relay state between episodes.
 
-Report issues at L<https://github.com/overnet-project/overnet-burner/issues>.
+Report issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

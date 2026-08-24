@@ -165,7 +165,7 @@ None known.
 Cannot authorize an event without persisting it, so it does not support
 non-persisting capability probes.
 
-Report issues at L<https://github.com/overnet-project/overnet-burner/issues>.
+Report issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

@@ -2,7 +2,7 @@
 
 Rex-based scalable Overnet system-test harness.
 
-GitHub: <https://github.com/overnet-project/overnet-burner>
+GitHub: <https://github.com/overnet-project/overnet-perl/tree/main/overnet-burner>
 
 `overnet-burner` measures the behavior of Overnet systems under realistic and
 extreme load, and tests whether they recover correctly from failure while

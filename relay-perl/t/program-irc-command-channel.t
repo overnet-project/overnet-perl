@@ -93,32 +93,33 @@ is(
   'OVERNETCHANNEL delegation preserves the existing parameter validation path',
 );
 
-my $server_path =
-  File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',);
-open my $server_fh, '<', $server_path
-  or die "Unable to read $server_path: $!";
-my $server_source = do { local $/ = undef; <$server_fh> };
-close $server_fh;
+my $dispatcher_path = File::Spec->catfile(
+  $FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Dispatcher.pm',
+);
+open my $dispatcher_fh, '<', $dispatcher_path
+  or die "Unable to read $dispatcher_path: $!";
+my $dispatcher_source = do { local $/ = undef; <$dispatcher_fh> };
+close $dispatcher_fh;
 
-like $server_source, qr/use\ Overnet::Program::IRC::Command::Channel;/mx,
-  'Server.pm loads the focused channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_join/mx,
-  'Server.pm delegates JOIN handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_part/mx,
-  'Server.pm delegates PART handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_privmsg_or_notice/mx,
-  'Server.pm delegates PRIVMSG and NOTICE handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_topic/mx,
-  'Server.pm delegates TOPIC handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_mode/mx,
-  'Server.pm delegates MODE handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_invite/mx,
-  'Server.pm delegates INVITE handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_kick/mx,
-  'Server.pm delegates KICK handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_list/mx,
-  'Server.pm delegates LIST handling to the channel command module';
-like $server_source, qr/Overnet::Program::IRC::Command::Channel::handle_overnetchannel/mx,
-  'Server.pm delegates OVERNETCHANNEL handling to the channel command module';
+like $dispatcher_source, qr/use\ Overnet::Program::IRC::Command::Channel;/mx,
+  'Dispatcher.pm loads the focused channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_join/mx,
+  'Dispatcher.pm delegates JOIN handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_part/mx,
+  'Dispatcher.pm delegates PART handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_privmsg_or_notice/mx,
+  'Dispatcher.pm delegates PRIVMSG and NOTICE handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_topic/mx,
+  'Dispatcher.pm delegates TOPIC handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_mode/mx,
+  'Dispatcher.pm delegates MODE handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_invite/mx,
+  'Dispatcher.pm delegates INVITE handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_kick/mx,
+  'Dispatcher.pm delegates KICK handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_list/mx,
+  'Dispatcher.pm delegates LIST handling to the channel command module';
+like $dispatcher_source, qr/Overnet::Program::IRC::Command::Channel::handle_overnetchannel/mx,
+  'Dispatcher.pm delegates OVERNETCHANNEL handling to the channel command module';
 
 done_testing;

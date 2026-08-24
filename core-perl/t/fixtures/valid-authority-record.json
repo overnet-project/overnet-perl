@@ -6,10 +6,10 @@
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"origin_match\":\"prefix\",\"pubkeys\":[\"a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2\"]}}",
       "created_at" : 1744301100,
-      "id" : "ad23ff6853e0fb7df579379a71f5f1d99ea5197e61ba75cfa7ac819c1993a1eb",
+      "id" : "5effe79e7ca096e3bfc8234365902ce32d94f6fa165596c93028a030895e2655",
       "kind" : 37800,
-      "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
-      "sig" : "7a4e884f17dff0890734c27b4868a221ea3c866572d1ac8b6166f6d7cd8637ae14b44b2a87da798400efb455121d0a6f0001f86b6d0c63eeae130d321cadbc77",
+      "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
+      "sig" : "ce2f73a368a0e3fee8a57d04d9c1673460a3493477760fc1bc0ccb78af1315775ab48e1343a9522e90161bc6a18b118e0aa45477326954ba7bd06f5966c3f0e9",
       "tags" : [
          [
             "d",

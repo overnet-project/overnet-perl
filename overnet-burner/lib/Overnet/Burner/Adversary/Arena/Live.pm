@@ -586,7 +586,7 @@ The arena drives the relay in process rather than over a WebSocket; it exercises
 the authorization engine, not the transport. All scopes map onto a single relay
 group.
 
-Report issues at L<https://github.com/overnet-project/overnet-burner/issues>.
+Report issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

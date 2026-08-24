@@ -3,10 +3,10 @@
       "target_event" : {
          "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
          "created_at" : 1744300800,
-         "id" : "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af",
+         "id" : "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad",
          "kind" : 7800,
-         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
-         "sig" : "e7d90694ddad1fa600dba349e715e9242a2c825cc4d76a06f082418e33a9523e95e742d39fdf83a72884facf5d7f91265bcd7f8844655da3f331aaa378293866",
+         "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
+         "sig" : "8ae40ebe1b3a543e908907130bf58c642c6a185bb528a4058bd3a60124fa72b426e65cce1e17c36874782299db2d911c2bff4eda88baf6ef80b99a2a57118a3a",
          "tags" : [
             [
                "overnet_v",
@@ -50,10 +50,10 @@
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
       "created_at" : 1744301000,
-      "id" : "93795ef9bf8ebe41bca17bb24dc8b57a9f8c670ffa83291168262c4276e24cb6",
+      "id" : "de0a9f5492e5808baccd17fc7cadbc4eef2f0e8b48eddbc70c603c43883e65a2",
       "kind" : 7801,
-      "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
-      "sig" : "79157cac4629c3e532465c294921f053f32ddc2e635d44effa566a408464ed7d3c26a5685722c3fa1ca4c0b37b89f344bf24de32f5817623149f3ade845ca1d9",
+      "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
+      "sig" : "8226c9c84c2bb2f764dd7dd6358f659f7146489e74836a580c5dd547275d693c02d13b9910755b4f079a6fb7cdc3831bf422f30be35a4ed809fc1ae20aaaba1f",
       "tags" : [
          [
             "overnet_v",
@@ -73,7 +73,7 @@
          ],
          [
             "e",
-            "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af"
+            "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad"
          ],
          [
             "v",

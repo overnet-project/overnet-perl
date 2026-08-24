@@ -2,9 +2,9 @@
 
 Perl reference implementation workspace for the shared Overnet core, authority, and program runtime layers.
 
-GitHub: <https://github.com/overnet-project/core-perl>
+GitHub: <https://github.com/overnet-project/overnet-perl/tree/main/core-perl>
 
-This repository tracks the draft specifications in:
+This distribution tracks the draft specifications in:
 
 - [spec/docs/core.md](https://github.com/overnet-project/spec/blob/main/docs/core.md)
 - [spec/docs/decisions.md](https://github.com/overnet-project/spec/blob/main/docs/decisions.md)
@@ -12,7 +12,7 @@ This repository tracks the draft specifications in:
 
 ## Status
 
-This repo intentionally excludes the relay application and relay-heavy integration gate.
+This distribution intentionally excludes the relay application and relay-heavy integration gate.
 
 Current implemented scope:
 
@@ -114,13 +114,13 @@ Regenerate shared fixtures from `spec` with:
 perl t/generate-fixtures.pl
 ```
 
-Relay daemons, relay sync, deploy packaging, and the heavy IRC release gate now live in [relay-perl](https://github.com/overnet-project/relay-perl).
+Relay daemons, relay sync, deploy packaging, and the heavy IRC release gate now live in [relay-perl](https://github.com/overnet-project/overnet-perl/tree/main/relay-perl).
 
-## Related Repositories
+## Related Components
 
 - [spec](https://github.com/overnet-project/spec)
-- [relay-perl](https://github.com/overnet-project/relay-perl)
-- [adapter-irc-perl](https://github.com/overnet-project/adapter-irc-perl)
+- [relay-perl](https://github.com/overnet-project/overnet-perl/tree/main/relay-perl)
+- [adapter-irc-perl](https://github.com/overnet-project/overnet-perl/tree/main/adapter-irc-perl)
 - [irc-server](https://github.com/overnet-project/irc-server)
 
 ## Notes

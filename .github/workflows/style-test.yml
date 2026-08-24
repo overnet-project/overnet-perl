@@ -1,26 +1,16 @@
-name: run-tests
+name: Perl style tests
 
 on:
   push:
     branches: [main]
     paths:
-      - 'lib/**'
-      - 't/**'
-      - 'xt/**'
-      - 'Makefile.PL'
-      - 'configs/**'
-      - 'tools/**'
-      - '.github/workflows/test.yml'
+      - 'overnet-perl-style/**'
+      - '.github/workflows/style-test.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'lib/**'
-      - 't/**'
-      - 'xt/**'
-      - 'Makefile.PL'
-      - 'configs/**'
-      - 'tools/**'
-      - '.github/workflows/test.yml'
+      - 'overnet-perl-style/**'
+      - '.github/workflows/style-test.yml'
 
 permissions:
   contents: read
@@ -37,6 +27,9 @@ jobs:
       PERL_LOCAL_LIB_ROOT: /home/runner/perl5
       PERL_MB_OPT: --install_base /home/runner/perl5
       PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+    defaults:
+      run:
+        working-directory: overnet-perl-style
 
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +42,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('Makefile.PL', '.github/workflows/test.yml') }}
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('overnet-perl-style/Makefile.PL', '.github/workflows/style-test.yml') }}
 
       - name: Install dependencies
         run: |
@@ -76,6 +69,9 @@ jobs:
       PERL_LOCAL_LIB_ROOT: /home/runner/perl5
       PERL_MB_OPT: --install_base /home/runner/perl5
       PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+    defaults:
+      run:
+        working-directory: overnet-perl-style
 
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +83,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-devel-cover-5.40-${{ hashFiles('Makefile.PL', '.github/workflows/test.yml') }}
+          key: perl-devel-cover-5.40-${{ hashFiles('overnet-perl-style/Makefile.PL', '.github/workflows/style-test.yml') }}
 
       - name: Install dependencies
         run: |

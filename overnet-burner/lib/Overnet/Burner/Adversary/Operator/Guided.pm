@@ -313,7 +313,7 @@ None known.
 The built-in proposer substitutes one field at a time, so a hole that only opens
 under a combination of substitutions is not reached by the default; a caller
 that needs deeper search supplies a composing C<propose>. Report issues at
-L<https://github.com/overnet-project/overnet-burner/issues>.
+L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

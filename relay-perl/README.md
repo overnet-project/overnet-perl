@@ -2,13 +2,13 @@
 
 Perl reference implementation workspace for the Overnet relay, relay sync, deploy wrappers, and relay-backed IRC integration gate.
 
-GitHub: <https://github.com/overnet-project/relay-perl>
+GitHub: <https://github.com/overnet-project/overnet-perl/tree/main/relay-perl>
 
-This repo depends on [core-perl](https://github.com/overnet-project/core-perl) for shared core, authority, and program runtime modules.
+This distribution depends on [core-perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl) for shared core, authority, and program runtime modules.
 
 ## Scope
 
-This repo owns:
+This distribution owns:
 
 - `Overnet::Relay` and the relay module tree
 - relay persistence, backup, and sync CLIs
@@ -16,7 +16,7 @@ This repo owns:
 - relay deploy packaging and canary topology assets
 - relay-backed IRC integration and release-gate tests
 
-Shared core validation and runtime code live in [core-perl](https://github.com/overnet-project/core-perl).
+Shared core validation and runtime code live in [core-perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl).
 
 ## Tests
 
@@ -45,11 +45,11 @@ Run the default release gate with:
 perl bin/overnet-release-gate.pl
 ```
 
-## Related Repositories
+## Related Components
 
 - [spec](https://github.com/overnet-project/spec)
-- [core-perl](https://github.com/overnet-project/core-perl)
-- [adapter-irc-perl](https://github.com/overnet-project/adapter-irc-perl)
+- [core-perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl)
+- [adapter-irc-perl](https://github.com/overnet-project/overnet-perl/tree/main/adapter-irc-perl)
 - [irc-server](https://github.com/overnet-project/irc-server)
 
 ## AI Usage

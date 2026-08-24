@@ -293,7 +293,7 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Report issues at L<https://github.com/overnet-project/relay-perl/issues>.
+Report issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

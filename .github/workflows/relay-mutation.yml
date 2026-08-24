@@ -1,4 +1,4 @@
-name: mutation
+name: relay mutation
 
 # Manual-only. Mutation testing reruns the whole selected suite once per mutant,
 # so it is far too slow for push/PR CI. Trigger it from the Actions tab (or the
@@ -40,20 +40,18 @@ jobs:
     name: Devel::Mutator gate
     timeout-minutes: 120
     env:
-      PERL5LIB: /home/runner/perl5/lib/perl5:${{ github.workspace }}/core-perl/lib
+      PERL5LIB: /home/runner/perl5/lib/perl5:${{ github.workspace }}/core-perl/lib:${{ github.workspace }}/irc-server/lib
       PERL_LOCAL_LIB_ROOT: /home/runner/perl5
       PERL_MB_OPT: --install_base /home/runner/perl5
       PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: adapter-irc-perl
 
       - uses: actions/checkout@v4
         with:
-          repository: overnet-project/core-perl
-          path: core-perl
+          repository: overnet-project/irc-server
+          path: irc-server
 
       - uses: actions/checkout@v4
         with:
@@ -67,17 +65,17 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-mutation-${{ inputs.perl_version }}-${{ hashFiles('adapter-irc-perl/Makefile.PL', 'adapter-irc-perl/.github/workflows/mutation.yml') }}
+          key: perl-mutation-${{ inputs.perl_version }}-${{ hashFiles('relay-perl/Makefile.PL', '.github/workflows/relay-mutation.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
-          cpanm --local-lib ~/perl5 --installdeps ./adapter-irc-perl
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --installdeps ./relay-perl
+          cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
           cpanm --local-lib ~/perl5 --notest Devel::Mutator
 
       - name: Run mutation gate
-        working-directory: adapter-irc-perl
+        working-directory: relay-perl
         env:
           OVERNET_MUTATION: '1'
           OVERNET_MUTATION_FILES: ${{ inputs.files }}

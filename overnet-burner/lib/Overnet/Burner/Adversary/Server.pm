@@ -391,7 +391,7 @@ None known.
 =head1 BUGS AND LIMITATIONS
 
 Sessions are held in memory for the life of the process. Report issues at
-L<https://github.com/overnet-project/overnet-burner/issues>.
+L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

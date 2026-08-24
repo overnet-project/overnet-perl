@@ -1,10 +1,10 @@
 # Overnet Relay Perl — Project Instructions
 
-This repository contains the Perl reference implementation for the Overnet relay, relay sync, deploy tooling, and relay-backed integration surface.
+This directory contains the Perl reference implementation for the Overnet relay, relay sync, deploy tooling, and relay-backed integration surface.
 
 The [Overnet specification](https://github.com/overnet-project/spec) is authoritative. Relay behavior must conform to the [relay specification](https://github.com/overnet-project/spec/blob/main/docs/relay.md), the [core specification](https://github.com/overnet-project/spec/blob/main/docs/core.md), and any applicable profile specifications such as the [IRC adapter specification](https://github.com/overnet-project/spec/blob/main/docs/adapters/irc.md). If implementation behavior and the spec disagree, fix the implementation unless the spec is explicitly changed first.
 
-Shared core validation, authority helpers, and program runtime semantics live in the [core Perl repository](https://github.com/overnet-project/core-perl). IRC-specific adapter and server behavior lives in the [IRC adapter](https://github.com/overnet-project/adapter-irc-perl) and [IRC server](https://github.com/overnet-project/irc-server) repositories.
+Shared core validation, authority helpers, and program runtime semantics live in the [`core-perl` distribution](https://github.com/overnet-project/overnet-perl/tree/main/core-perl). IRC-specific adapter behavior lives in the [`adapter-irc-perl` distribution](https://github.com/overnet-project/overnet-perl/tree/main/adapter-irc-perl), while the deployable IRC server remains in the separate [`irc-server` repository](https://github.com/overnet-project/irc-server).
 
 ## Priorities
 
@@ -21,7 +21,7 @@ If relay work exposes a spec ambiguity or gap, update the spec and any relevant 
 
 ## Scope
 
-This repository owns:
+This distribution owns:
 
 - `Overnet::Relay` and the relay module tree
 - relay storage, backup, and sync behavior
@@ -29,7 +29,7 @@ This repository owns:
 - relay deploy packaging and canary topology assets
 - relay-backed integration tests, including IRC release-gate coverage
 
-This repository does not own shared core validation or IRC mapping semantics. Do not copy or fork those rules here when they belong in the spec, [core Perl](https://github.com/overnet-project/core-perl), [IRC adapter](https://github.com/overnet-project/adapter-irc-perl), or [IRC server](https://github.com/overnet-project/irc-server) repositories.
+This distribution does not own shared core validation or IRC mapping semantics. Do not copy or fork those rules here when they belong in the spec, [core Perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl), [IRC adapter](https://github.com/overnet-project/overnet-perl/tree/main/adapter-irc-perl), or [IRC server](https://github.com/overnet-project/irc-server).
 
 ## Spec-First Workflow
 

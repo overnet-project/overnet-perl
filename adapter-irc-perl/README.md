@@ -2,7 +2,7 @@
 
 Perl implementation workspace for the Overnet IRC adapter.
 
-GitHub: <https://github.com/overnet-project/adapter-irc-perl>
+GitHub: <https://github.com/overnet-project/overnet-perl/tree/main/adapter-irc-perl>
 
 This dist is intended to implement the IRC adapter specification from [spec/docs/adapters/irc.md](https://github.com/overnet-project/spec/blob/main/docs/adapters/irc.md).
 
@@ -54,11 +54,11 @@ Run tests with:
 prove -v t/
 ```
 
-## Related Repositories
+## Related Components
 
 - [spec](https://github.com/overnet-project/spec)
-- [core-perl](https://github.com/overnet-project/core-perl)
-- [relay-perl](https://github.com/overnet-project/relay-perl)
+- [core-perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl)
+- [relay-perl](https://github.com/overnet-project/overnet-perl/tree/main/relay-perl)
 - [irc-server](https://github.com/overnet-project/irc-server)
 
 ## AI Usage

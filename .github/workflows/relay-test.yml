@@ -1,30 +1,22 @@
-name: run-tests
+name: relay tests
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'bin/**'
-      - 'deploy/**'
-      - 'lib/**'
-      - 'Makefile.PL'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/relay-test.yml'
+      - 'relay-perl/**'
+      - 'core-perl/**'
+      - 'adapter-irc-perl/**'
+      - 'overnet-perl-style/**'
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'bin/**'
-      - 'deploy/**'
-      - 'lib/**'
-      - 'Makefile.PL'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/relay-test.yml'
+      - 'relay-perl/**'
+      - 'core-perl/**'
+      - 'adapter-irc-perl/**'
+      - 'overnet-perl-style/**'
 
 permissions:
   contents: read
@@ -44,13 +36,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: relay-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
 
       - uses: actions/checkout@v4
         with:
@@ -59,16 +44,8 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: overnet-project/adapter-irc-perl
-          path: adapter-irc-perl
-
-      - uses: actions/checkout@v4
-        with:
           repository: overnet-project/spec
           path: spec
-
-      - name: Link spec checkout above the workspace
-        run: ln -sfn "$GITHUB_WORKSPACE/spec" "$GITHUB_WORKSPACE/../spec"
 
       - uses: shogo82148/actions-setup-perl@v1
         id: setup-perl
@@ -78,13 +55,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('relay-perl/Makefile.PL', 'relay-perl/.github/workflows/test.yml') }}
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('relay-perl/Makefile.PL', '.github/workflows/relay-test.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./relay-perl
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
 
       - name: Run tests
         working-directory: relay-perl
@@ -104,23 +81,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: relay-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
 
       - uses: actions/checkout@v4
         with:
           repository: overnet-project/irc-server
           path: irc-server
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/adapter-irc-perl
-          path: adapter-irc-perl
 
       - uses: actions/checkout@v4
         with:
@@ -134,13 +99,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-devel-cover-5.40-${{ hashFiles('relay-perl/Makefile.PL', 'relay-perl/.github/workflows/test.yml') }}
+          key: perl-devel-cover-5.40-${{ hashFiles('relay-perl/Makefile.PL', '.github/workflows/relay-test.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./relay-perl
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 

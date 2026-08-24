@@ -376,7 +376,7 @@ combination of mutations are not reached by the default set; a caller that needs
 deeper search supplies composing operators. Exploration cost is linear in the
 number of variants times the cost of one run against the arena.
 
-Report issues at L<https://github.com/overnet-project/overnet-burner/issues>.
+Report issues at L<https://github.com/overnet-project/overnet-perl/issues>.
 
 =head1 AUTHOR
 

@@ -12,7 +12,7 @@
 # `systemctl --user daemon-reload`.
 [Unit]
 Description=Overnet relay (rootless podman)
-Documentation=https://github.com/overnet-project/relay-perl
+Documentation=https://github.com/overnet-project/overnet-perl/tree/main/relay-perl
 After=network-online.target
 Wants=network-online.target
 

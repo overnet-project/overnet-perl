@@ -1,42 +1,22 @@
-name: run-tests
+name: Burner tests
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'README.md'
-      - 'bin/**'
-      - 'docs/**'
-      - 'examples/**'
-      - 'lib/**'
-      - 'MANIFEST'
-      - 'Makefile.PL'
-      - 'profile-templates/**'
-      - 'scenarios/**'
-      - 'schemas/**'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/burner-test.yml'
+      - 'overnet-burner/**'
+      - 'core-perl/**'
+      - 'relay-perl/**'
+      - 'overnet-perl-style/**'
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'README.md'
-      - 'bin/**'
-      - 'docs/**'
-      - 'examples/**'
-      - 'lib/**'
-      - 'MANIFEST'
-      - 'Makefile.PL'
-      - 'profile-templates/**'
-      - 'scenarios/**'
-      - 'schemas/**'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/burner-test.yml'
+      - 'overnet-burner/**'
+      - 'core-perl/**'
+      - 'relay-perl/**'
+      - 'overnet-perl-style/**'
 
 permissions:
   contents: read
@@ -59,18 +39,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: overnet-burner
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/relay-perl
-          path: relay-perl
 
       - uses: shogo82148/actions-setup-perl@v1
         id: setup-perl
@@ -80,12 +48,12 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('overnet-burner/Makefile.PL', 'overnet-burner/.github/workflows/test.yml') }}
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('overnet-burner/Makefile.PL', '.github/workflows/burner-test.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest ../overnet-perl-style
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
       - name: Enable localhost sshd for connect-transport tests
@@ -153,18 +121,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: overnet-burner
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/relay-perl
-          path: relay-perl
 
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -173,7 +129,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-5.40-${{ hashFiles('overnet-burner/Makefile.PL', 'overnet-burner/.github/workflows/test.yml') }}
+          key: perl-5.40-${{ hashFiles('overnet-burner/Makefile.PL', '.github/workflows/burner-test.yml') }}
 
       - name: Install dependencies
         run: |
@@ -200,18 +156,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: overnet-burner
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/relay-perl
-          path: relay-perl
 
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -220,7 +164,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-coverage-5.40-${{ hashFiles('overnet-burner/Makefile.PL', 'overnet-burner/.github/workflows/test.yml') }}
+          key: perl-coverage-5.40-${{ hashFiles('overnet-burner/Makefile.PL', '.github/workflows/burner-test.yml') }}
 
       - name: Install dependencies
         run: |
@@ -248,18 +192,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: overnet-burner
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/relay-perl
-          path: relay-perl
 
       - uses: shogo82148/actions-setup-perl@v1
         id: setup-perl
@@ -269,7 +201,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-smoke-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('overnet-burner/Makefile.PL', 'overnet-burner/.github/workflows/test.yml') }}
+          key: perl-smoke-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('overnet-burner/Makefile.PL', '.github/workflows/burner-test.yml') }}
 
       - name: Install dependencies
         run: |
@@ -303,18 +235,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: overnet-burner
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/relay-perl
-          path: relay-perl
 
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -323,7 +243,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-devel-cover-5.40-${{ hashFiles('overnet-burner/Makefile.PL', 'overnet-burner/.github/workflows/test.yml') }}
+          key: perl-devel-cover-5.40-${{ hashFiles('overnet-burner/Makefile.PL', '.github/workflows/burner-test.yml') }}
 
       - name: Install dependencies
         run: |

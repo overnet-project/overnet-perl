@@ -1,26 +1,20 @@
-name: run-tests
+name: IRC adapter tests
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'lib/**'
-      - 'Makefile.PL'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/adapter-irc-test.yml'
+      - 'adapter-irc-perl/**'
+      - 'core-perl/**'
+      - 'overnet-perl-style/**'
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/test.yml'
-      - '.perlcriticrc'
-      - '.perltidyrc'
-      - 'lib/**'
-      - 'Makefile.PL'
-      - 't/**'
-      - 'xt/**'
+      - '.github/workflows/adapter-irc-test.yml'
+      - 'adapter-irc-perl/**'
+      - 'core-perl/**'
+      - 'overnet-perl-style/**'
 
 permissions:
   contents: read
@@ -40,13 +34,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: adapter-irc-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
 
       - uses: actions/checkout@v4
         with:
@@ -61,13 +48,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('adapter-irc-perl/Makefile.PL', 'adapter-irc-perl/.github/workflows/test.yml') }}
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('adapter-irc-perl/Makefile.PL', '.github/workflows/adapter-irc-test.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./adapter-irc-perl
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
 
       - name: Run tests
         working-directory: adapter-irc-perl
@@ -87,13 +74,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: adapter-irc-perl
-
-      - uses: actions/checkout@v4
-        with:
-          repository: overnet-project/core-perl
-          path: core-perl
 
       - uses: actions/checkout@v4
         with:
@@ -107,13 +87,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/perl5
-          key: perl-devel-cover-5.40-${{ hashFiles('adapter-irc-perl/Makefile.PL', 'adapter-irc-perl/.github/workflows/test.yml') }}
+          key: perl-devel-cover-5.40-${{ hashFiles('adapter-irc-perl/Makefile.PL', '.github/workflows/adapter-irc-test.yml') }}
 
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./adapter-irc-perl
-          cpanm --local-lib ~/perl5 --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
