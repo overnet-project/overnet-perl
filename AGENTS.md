@@ -9,8 +9,8 @@ independently buildable and releasable.
 - `core-perl/` owns core validation, shared authority helpers, and program/runtime libraries.
 - `relay-perl/` owns relay behavior, synchronization, deployment, recovery, and relay-heavy gates.
 - `adapter-irc-perl/` owns IRC-specific protocol mapping.
-- `overnet-burner/` owns implementation-neutral system, performance, and chaos testing.
 - `overnet-perl-style/` owns the shared Perl::Critic policies and author-test templates.
+- `overnet-burner` remains a separate repository and owns implementation-neutral system, performance, and chaos testing.
 - `irc-server` remains a separate repository and deployable application.
 - The separate `spec` repository is authoritative for protocol behavior.
 
@@ -30,8 +30,8 @@ machine-local root `.plx` layout. CPAN dependencies belong in that shared Perl.
 Active Overnet distributions must be loaded from their checkout `lib/`
 directories rather than installed into the shared Perl.
 
-The component directories are not nested Git repositories, so `plx` discovers
-the root layout from them. Run component suites from the corresponding
+The monorepo component directories are not nested Git repositories, so `plx`
+discovers the root layout from them. Run component suites from the corresponding
 distribution root when they use relative `lib/`, `t/`, or `xt/` paths. For
 example:
 
@@ -39,6 +39,14 @@ example:
 cd core-perl
 plx prove -v t/validator.t
 plx prove -r t/ xt/author/
+```
+
+Local `overnet-burner/` and `irc-server/` directories are ignored, separate Git
+checkouts. Invoke their test commands through `plx` from this repository root so
+they share the project Perl and active monorepo source directories.
+
+```bash
+plx bash -c 'cd overnet-burner && prove -r -l t/ xt/author/'
 ```
 
 ## Testing
