@@ -53,6 +53,7 @@ jobs:
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest ../overnet-perl-style
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
@@ -134,6 +135,7 @@ jobs:
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
       - name: Replay the adversary catalog against the real relay
@@ -169,6 +171,7 @@ jobs:
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
@@ -206,6 +209,7 @@ jobs:
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 
       - name: Verify Docker is available
@@ -248,6 +252,7 @@ jobs:
       - name: Install dependencies
         run: |
           cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
 

@@ -43,6 +43,26 @@ for my $workflow (qw(
     "$workflow is active at the monorepo root";
 }
 
+for my $workflow (qw(
+  adapter-irc-mutation.yml
+  adapter-irc-test.yml
+  burner-mutation.yml
+  burner-test.yml
+  core-mutation.yml
+  core-test.yml
+  relay-mutation.yml
+  relay-test.yml
+)) {
+  my $content = _slurp(File::Spec->catfile($root, '.github', 'workflows', $workflow));
+  my $dependency_steps = () = $content =~ /name:\s+Install\s+dependencies/gmx;
+  my $coherent_nostr_installs = () = $content =~ m{
+    cpanm\s+--local-lib\s+~/perl5\s+--notest\s+--reinstall\s+
+    Net::Nostr::Core\s+Net::Nostr::Client\s+Net::Nostr::Relay
+  }gmx;
+  is $coherent_nostr_installs, $dependency_steps,
+    "$workflow refreshes every split Net::Nostr distribution in each dependency step";
+}
+
 my $gitignore = _slurp(File::Spec->catfile($root, '.gitignore'));
 like $gitignore, qr{^/\.plx/$}mx,
   'machine-local plx state is excluded from the monorepo';

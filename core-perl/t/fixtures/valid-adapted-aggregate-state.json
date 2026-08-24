@@ -6,10 +6,10 @@
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":\"irc\",\"origin\":\"irc.libera.chat/#overnet\",\"external_scope\":\"channel_membership\",\"limitations\":[\"unsigned\",\"irc.partial_membership\"]},\"body\":{\"members\":[{\"nick\":\"alice\"}],\"partial\":true,\"as_of\":1744300865}}",
       "created_at" : 1744300865,
-      "id" : "c632214317461e4c3d7074555c4a92eec489936564d42cf9ddec94b9bb3b7796",
+      "id" : "3e8672ce6a40580650376cb481350d9a4fc1297edb12d0b885c0fb7505eaf6ed",
       "kind" : 37800,
-      "pubkey" : "2e7c5dbb4e20706755a25a3bc5c0cda3b0f1f9f4886d51bcbbb0afed1f43d989",
-      "sig" : "302d7303fbf82a041167423bee12c7673bdd830edac6154a7f5b707abfbee3ee398e2ca922b40bb9c82e792137be2670b469dd0bbfc92b9a4d9c60fd998e34e8",
+      "pubkey" : "384779935511c945ec1e2a36b573e94c8dbc2c3b80d9ed39aa2c3446e9d86b6b",
+      "sig" : "9bb7f5c50e888c6fb48e0975f590be348dca6f8a90caeee699adf7e678980a607f5bcc36ea39d197ee14dde32f08d6789d6fac9169917d0779ed3595223d40dd",
       "tags" : [
          [
             "overnet_v",
@@ -25,11 +25,11 @@
          ],
          [
             "overnet_oid",
-            "2e7c5dbb4e20706755a25a3bc5c0cda3b0f1f9f4886d51bcbbb0afed1f43d989"
+            "384779935511c945ec1e2a36b573e94c8dbc2c3b80d9ed39aa2c3446e9d86b6b"
          ],
          [
             "d",
-            "2e7c5dbb4e20706755a25a3bc5c0cda3b0f1f9f4886d51bcbbb0afed1f43d989"
+            "384779935511c945ec1e2a36b573e94c8dbc2c3b80d9ed39aa2c3446e9d86b6b"
          ],
          [
             "v",

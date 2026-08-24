@@ -1,12 +1,12 @@
 {
    "context" : {
       "delegation_event" : {
-         "content" : "{\n   \"body\" : {\n      \"action\" : \"remove\",\n      \"delegate_pubkey\" : \"b51c2e4768e54ed0fc548800e583711be9407cd10ba107f1807067039876e760\",\n      \"expires_at\" : 1744304600\n   },\n   \"provenance\" : {\n      \"type\" : \"adapted\"\n   }\n}\n",
+         "content" : "{\n   \"body\" : {\n      \"action\" : \"remove\",\n      \"delegate_pubkey\" : \"9ebea3f6f595c0a3fca2a4b29631800a85d3120c860ce6b00a1d423d381a1a3b\",\n      \"expires_at\" : 1744304600\n   },\n   \"provenance\" : {\n      \"type\" : \"adapted\"\n   }\n}\n",
          "created_at" : 1744300950,
-         "id" : "6ae155f05dcfa0d4f2b14e83df8c608661861e02a41ea687c4a95510248f1ada",
+         "id" : "67cc85ee02dac52e1709729fa84cc6dd6c085f8e41a5f0d51633c29ce3160f8e",
          "kind" : 7800,
-         "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
-         "sig" : "9b360a567f9a3bb3083d6962a15e6765e0428b110b8ec898020f576c3c301613613e29650051f62f07b056561c2505fdf21993c48a07318fcdc73af137311cba",
+         "pubkey" : "bc697d3506ec36fd6fcfa22f38629a29ddccae0e1ae45477112001908bbcb648",
+         "sig" : "32b9ff1f28b9c48489b18e1ea2b2e0724078e919766df198a4797ed2f68f88c0764e7c192296044d4fde90236977b636812c53640af9c2bc610440352dbcf480",
          "tags" : [
             [
                "overnet_v",
@@ -45,10 +45,10 @@
       "target_event" : {
          "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
          "created_at" : 1744300800,
-         "id" : "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad",
+         "id" : "4849b5bb05cc08e90088476ea37d754682ff5b56d0aa2d37c13f3b416f225dd9",
          "kind" : 7800,
-         "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
-         "sig" : "8ae40ebe1b3a543e908907130bf58c642c6a185bb528a4058bd3a60124fa72b426e65cce1e17c36874782299db2d911c2bff4eda88baf6ef80b99a2a57118a3a",
+         "pubkey" : "bc697d3506ec36fd6fcfa22f38629a29ddccae0e1ae45477112001908bbcb648",
+         "sig" : "9699973ac61cc142e01f63484c46eb42d68532d3b263a20017ab8253330cf0395453602c70b31c841055ac52b8949b7556de97ec482f85df478468f76ee52911",
          "tags" : [
             [
                "overnet_v",
@@ -95,7 +95,7 @@
       "created_at" : 1744301000,
       "id" : "cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005",
       "kind" : 7801,
-      "pubkey" : "b51c2e4768e54ed0fc548800e583711be9407cd10ba107f1807067039876e760",
+      "pubkey" : "9ebea3f6f595c0a3fca2a4b29631800a85d3120c860ce6b00a1d423d381a1a3b",
       "sig" : "cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005",
       "tags" : [
          [
@@ -116,11 +116,11 @@
          ],
          [
             "e",
-            "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad"
+            "4849b5bb05cc08e90088476ea37d754682ff5b56d0aa2d37c13f3b416f225dd9"
          ],
          [
             "overnet_delegate",
-            "6ae155f05dcfa0d4f2b14e83df8c608661861e02a41ea687c4a95510248f1ada"
+            "67cc85ee02dac52e1709729fa84cc6dd6c085f8e41a5f0d51633c29ce3160f8e"
          ],
          [
             "v",

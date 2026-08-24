@@ -3,10 +3,10 @@
       "target_event" : {
          "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
          "created_at" : 1744300800,
-         "id" : "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad",
+         "id" : "4849b5bb05cc08e90088476ea37d754682ff5b56d0aa2d37c13f3b416f225dd9",
          "kind" : 7800,
-         "pubkey" : "c71d0052a370e7d647c5a1ac605f733dc95bba18e1096009ba3011232f60d323",
-         "sig" : "8ae40ebe1b3a543e908907130bf58c642c6a185bb528a4058bd3a60124fa72b426e65cce1e17c36874782299db2d911c2bff4eda88baf6ef80b99a2a57118a3a",
+         "pubkey" : "bc697d3506ec36fd6fcfa22f38629a29ddccae0e1ae45477112001908bbcb648",
+         "sig" : "9699973ac61cc142e01f63484c46eb42d68532d3b263a20017ab8253330cf0395453602c70b31c841055ac52b8949b7556de97ec482f85df478468f76ee52911",
          "tags" : [
             [
                "overnet_v",
@@ -74,7 +74,7 @@
          ],
          [
             "e",
-            "2e96f9ab3d6543ad4ea36334e299aa11262c07eaed4a13c5277dca9771f218ad"
+            "4849b5bb05cc08e90088476ea37d754682ff5b56d0aa2d37c13f3b416f225dd9"
          ],
          [
             "v",

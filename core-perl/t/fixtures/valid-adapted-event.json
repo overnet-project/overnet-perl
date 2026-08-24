@@ -6,10 +6,10 @@
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":\"irc\",\"origin\":\"irc.libera.chat/#overnet\",\"external_identity\":\"alice\",\"limitations\":[\"unsigned\",\"no_edit_history\"]},\"body\":{\"text\":\"Hello from IRC!\"}}",
       "created_at" : 1744300860,
-      "id" : "26a7acdc9acf554f9386372111a45c569a0e392f6158272e982c76a1a0b296a1",
+      "id" : "1c7de1648498f9a9a4a76ea7c1df078edc38480d370cafe7a56d7fd9d9d5531c",
       "kind" : 7800,
-      "pubkey" : "2e7c5dbb4e20706755a25a3bc5c0cda3b0f1f9f4886d51bcbbb0afed1f43d989",
-      "sig" : "abf52fed84a98cc7dfbe662f0e426c116f540479b84ffcb4fd86c3708ceea438b1bfc7a0fdda4b82df814cd45d3e7aa22582547bdbb853ca5bb0b64988deb9b6",
+      "pubkey" : "384779935511c945ec1e2a36b573e94c8dbc2c3b80d9ed39aa2c3446e9d86b6b",
+      "sig" : "b71106809c67e501b262a851b5a7e7c8e9d5caf493f2ffaadb659bcf1fce2ab3df74f144bdf1a6b5beb17544e0c33181b60f8a0cee6661798e29ffb89a1579db",
       "tags" : [
          [
             "overnet_v",
