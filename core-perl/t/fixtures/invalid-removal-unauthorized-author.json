@@ -1,0 +1,97 @@
+{
+   "context" : {
+      "target_event" : {
+         "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
+         "created_at" : 1744300800,
+         "id" : "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af",
+         "kind" : 7800,
+         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+         "sig" : "e7d90694ddad1fa600dba349e715e9242a2c825cc4d76a06f082418e33a9523e95e742d39fdf83a72884facf5d7f91265bcd7f8844655da3f331aaa378293866",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "chat.message"
+            ],
+            [
+               "overnet_ot",
+               "chat.channel"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ],
+            [
+               "v",
+               "0.1.0"
+            ],
+            [
+               "t",
+               "chat.message"
+            ],
+            [
+               "o",
+               "chat.channel"
+            ],
+            [
+               "d",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      }
+   },
+   "description" : "Invalid: kind 7801 removal event is authored by a different pubkey than the target event. Under baseline core authorization, removals are authorized only for the same authoring pubkey.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 7801 removal must be authored by the same pubkey as the target event"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "eeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aa",
+      "kind" : 7801,
+      "pubkey" : "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+      "sig" : "eeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aaeeff11aa",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

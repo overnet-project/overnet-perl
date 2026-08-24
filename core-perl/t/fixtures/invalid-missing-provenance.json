@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: content JSON is missing the required provenance field. A relay MUST reject this event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Missing required provenance field in content"
+   },
+   "input" : {
+      "content" : "{\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "cccc2222cccc2222cccc2222cccc2222cccc2222cccc2222cccc2222cccc2222",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333dddd3333",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

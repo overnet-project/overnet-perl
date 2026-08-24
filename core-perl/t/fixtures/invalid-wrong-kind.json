@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: kind 1 is not an Overnet kind. Overnet tags on a non-Overnet kind do not make it an Overnet event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 1 is not a recognized Overnet kind (must be 7800, 37800, or 7801)"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "aabb0011aabb0011aabb0011aabb0011aabb0011aabb0011aabb0011aabb0011",
+      "kind" : 1,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233ccdd2233",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

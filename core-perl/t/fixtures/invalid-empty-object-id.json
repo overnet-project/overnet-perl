@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: a kind 7800 event whose overnet_oid (and its d mirror) is an empty string. Object identifiers MUST be non-empty strings per section 6.5.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "overnet_oid tag must be a non-empty string"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
+      "created_at" : 1744300800,
+      "id" : "cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006cafe0006",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            ""
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            ""
+         ]
+      ]
+   }
+}

@@ -1,0 +1,57 @@
+{
+   "description" : "Invalid: kind 7801 removal event includes duplicate e tags. A kind 7801 event MUST include exactly one e tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Duplicate e tag"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "99aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc66",
+      "kind" : 7801,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "99aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc6699aacc66",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+         ],
+         [
+            "e",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

@@ -1,0 +1,142 @@
+{
+   "context" : {
+      "delegation_event" : {
+         "content" : "{\n   \"body\" : {\n      \"action\" : \"remove\",\n      \"delegate_pubkey\" : \"499b4b45f75f85791684829d4c669ea9c9b456274060ff0b3c7ce364c86daf06\",\n      \"expires_at\" : 1744304600\n   },\n   \"provenance\" : {\n      \"type\" : \"native\"\n   }\n}\n",
+         "created_at" : 1744300950,
+         "id" : "f2d169fe813c776134073f1d7eb1ea822f4e174e2e9ff31a8ee7723427e9cfe5",
+         "kind" : 7800,
+         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+         "sig" : "23d5dd4dc450e4ee021b6d8f61946b78409cca8b04a823b5e0c8a586d6856b90efe04bcfbe8d3b40149fafeaae1fac12c3078c977207fe52ced8ce6ff441565b",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "core.delegation"
+            ],
+            [
+               "overnet_ot",
+               "chat.channel"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ],
+            [
+               "v",
+               "0.1.0"
+            ],
+            [
+               "t",
+               "core.delegation"
+            ],
+            [
+               "o",
+               "chat.channel"
+            ],
+            [
+               "d",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      },
+      "target_event" : {
+         "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
+         "created_at" : 1744300800,
+         "id" : "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af",
+         "kind" : 7800,
+         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+         "sig" : "e7d90694ddad1fa600dba349e715e9242a2c825cc4d76a06f082418e33a9523e95e742d39fdf83a72884facf5d7f91265bcd7f8844655da3f331aaa378293866",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "chat.message"
+            ],
+            [
+               "overnet_ot",
+               "chat.channel"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ],
+            [
+               "v",
+               "0.1.0"
+            ],
+            [
+               "t",
+               "chat.message"
+            ],
+            [
+               "o",
+               "chat.channel"
+            ],
+            [
+               "d",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      }
+   },
+   "description" : "A valid delegated Overnet Removal event that uses a core delegation grant for one object.",
+   "expected" : {
+      "overnet_valid" : true
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "aed58f0dea181e18bdd2792794de43711eee567ac3ea2519a921e07b0c925869",
+      "kind" : 7801,
+      "pubkey" : "499b4b45f75f85791684829d4c669ea9c9b456274060ff0b3c7ce364c86daf06",
+      "sig" : "5f6996177fb23397dcadfc828e1ef9b001023cf8045acd3ea1e9299710335dbdf09d67f00cd7b38a47adf6183e636461221e820efeb51f93aaec4e5f9e2becc6",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af"
+         ],
+         [
+            "overnet_delegate",
+            "f2d169fe813c776134073f1d7eb1ea822f4e174e2e9ff31a8ee7723427e9cfe5"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

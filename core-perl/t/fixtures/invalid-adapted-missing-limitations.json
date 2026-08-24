@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: adapted provenance is missing the required limitations field. A relay MUST reject this event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapted provenance missing required limitations field"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":\"irc\",\"origin\":\"irc.libera.chat/#overnet\"},\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77",
+      "kind" : 7800,
+      "pubkey" : "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+      "sig" : "ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77ff66aa77",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "irc:libera.chat:#overnet"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "irc:libera.chat:#overnet"
+         ]
+      ]
+   }
+}

@@ -1,0 +1,53 @@
+{
+   "description" : "Invalid: kind 7801 removal event has no target event context available for authorization. If the referenced target event is unavailable, the removal MUST be rejected.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 7801 requires target event context for authorization"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99",
+      "kind" : 7801,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99ccddff99",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

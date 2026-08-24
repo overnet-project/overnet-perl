@@ -1,0 +1,33 @@
+{
+   "description" : "Invalid: adapted provenance limitations must be an array of strings.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapted provenance limitations must be an array of strings"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":\"irc\",\"origin\":\"irc.libera.chat/#overnet\",\"external_identity\":\"alice\",\"limitations\":[\"unsigned\",{}]},\"body\":{\"text\":\"Hello from IRC!\"}}",
+      "created_at" : 1744300860,
+      "id" : "7b161853ecfb2626721c8789bd2dde4b33b51b390a0afd6b9b6297adbcb60f3e",
+      "kind" : 7800,
+      "pubkey" : "0e206c9dd3d3a8f6ab4e0d23143ea9c3da7308c975a9c484b5950a5eb435ddc1",
+      "sig" : "6ff5ce0dd735c9b614ab08944f80b64429f52b942c35d180e20e674d799ab5058a537769a414e3ba333e0c72eca4bfc119d10a7b1ef57ebed230c128fe418d01",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "irc:libera.chat:#overnet"
+         ]
+      ]
+   }
+}

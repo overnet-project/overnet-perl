@@ -1,0 +1,81 @@
+{
+   "context" : {
+      "target_event" : {
+         "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+         "created_at" : 1744300900,
+         "id" : "a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2",
+         "kind" : 7800,
+         "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+         "sig" : "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "chat.message"
+            ],
+            [
+               "overnet_ot",
+               "chat.message"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      }
+   },
+   "description" : "Invalid: kind 7801 removal is authorized against a forged target event whose signature and id do not verify. A removal MUST NOT be authorized against an unverified or forged target event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 7801 target event failed Nostr validation"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001",
+      "kind" : 7801,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001cafe0001",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

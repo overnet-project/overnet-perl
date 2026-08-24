@@ -1,0 +1,53 @@
+{
+   "description" : "Invalid: duplicate overnet_et tags are present. An Overnet core event MUST NOT include more than one overnet_et tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Duplicate overnet_et tag"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee1122aaee",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_et",
+            "chat.reaction"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

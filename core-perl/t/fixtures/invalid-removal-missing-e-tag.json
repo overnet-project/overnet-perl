@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: kind 7801 removal event is missing the required e tag. A kind 7801 event MUST include exactly one e tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 7801 requires an e tag identifying the event being tombstoned"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77",
+      "kind" : 7801,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77aabbdd77",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: content is valid JSON but an array, not an object. A relay MUST reject this event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Content must be a JSON object"
+   },
+   "input" : {
+      "content" : "[\"not\",\"an\",\"object\"]",
+      "created_at" : 1744300800,
+      "id" : "dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55dd44ee55",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

@@ -1,0 +1,48 @@
+{
+   "description" : "A valid core delegation event authorizing delegated removal for one object.",
+   "expected" : {
+      "overnet_valid" : true
+   },
+   "input" : {
+      "content" : "{\n   \"body\" : {\n      \"action\" : \"remove\",\n      \"delegate_pubkey\" : \"499b4b45f75f85791684829d4c669ea9c9b456274060ff0b3c7ce364c86daf06\",\n      \"expires_at\" : 1744304600\n   },\n   \"provenance\" : {\n      \"type\" : \"native\"\n   }\n}\n",
+      "created_at" : 1744300950,
+      "id" : "f2d169fe813c776134073f1d7eb1ea822f4e174e2e9ff31a8ee7723427e9cfe5",
+      "kind" : 7800,
+      "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+      "sig" : "0f917d9c5d8a0ca081a2d412564aa4db1b3a221c7ee4344901a2e4c91f498c0b7982ad3f829bdb2886bfff3f0789c689ee85e58dd9aa849db181e0b16f38b83e",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.delegation"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.delegation"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

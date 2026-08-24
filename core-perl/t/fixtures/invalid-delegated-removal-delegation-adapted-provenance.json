@@ -1,0 +1,143 @@
+{
+   "context" : {
+      "delegation_event" : {
+         "content" : "{\n   \"body\" : {\n      \"action\" : \"remove\",\n      \"delegate_pubkey\" : \"499b4b45f75f85791684829d4c669ea9c9b456274060ff0b3c7ce364c86daf06\",\n      \"expires_at\" : 1744304600\n   },\n   \"provenance\" : {\n      \"type\" : \"adapted\"\n   }\n}\n",
+         "created_at" : 1744300950,
+         "id" : "1806b8d79f5aff4708beaa9d2b1e8f8f83dac4fb5848f566b167d08a8a8f7dbc",
+         "kind" : 7800,
+         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+         "sig" : "ff76b6a2e3cb7e888b88046d23f00574a1a59c5ba883bd4b21700c2f12c00798c5f2f8cccbf5de1c06c999aca1faa1c503b3ebf2b0363c88fd777d18365f9b16",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "core.delegation"
+            ],
+            [
+               "overnet_ot",
+               "chat.channel"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ],
+            [
+               "v",
+               "0.1.0"
+            ],
+            [
+               "t",
+               "core.delegation"
+            ],
+            [
+               "o",
+               "chat.channel"
+            ],
+            [
+               "d",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      },
+      "target_event" : {
+         "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello, world!\"}}",
+         "created_at" : 1744300800,
+         "id" : "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af",
+         "kind" : 7800,
+         "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+         "sig" : "e7d90694ddad1fa600dba349e715e9242a2c825cc4d76a06f082418e33a9523e95e742d39fdf83a72884facf5d7f91265bcd7f8844655da3f331aaa378293866",
+         "tags" : [
+            [
+               "overnet_v",
+               "0.1.0"
+            ],
+            [
+               "overnet_et",
+               "chat.message"
+            ],
+            [
+               "overnet_ot",
+               "chat.channel"
+            ],
+            [
+               "overnet_oid",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ],
+            [
+               "v",
+               "0.1.0"
+            ],
+            [
+               "t",
+               "chat.message"
+            ],
+            [
+               "o",
+               "chat.channel"
+            ],
+            [
+               "d",
+               "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            ]
+         ]
+      }
+   },
+   "description" : "Invalid: delegated kind 7801 removal references a validly signed delegation event whose provenance is adapted rather than native. A referenced delegation event MUST be native Overnet data per section 6.14.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Delegated removal delegation event must use native provenance"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005",
+      "kind" : 7801,
+      "pubkey" : "499b4b45f75f85791684829d4c669ea9c9b456274060ff0b3c7ce364c86daf06",
+      "sig" : "cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005cafe0005",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.removal"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a84c45125c2ccd5cc91a623a8afb804acb150f65146f053774a41271de2db6af"
+         ],
+         [
+            "overnet_delegate",
+            "1806b8d79f5aff4708beaa9d2b1e8f8f83dac4fb5848f566b167d08a8a8f7dbc"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.removal"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

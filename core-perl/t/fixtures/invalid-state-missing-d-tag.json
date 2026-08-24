@@ -1,0 +1,45 @@
+{
+   "description" : "Invalid: kind 37800 (Overnet State) requires a d tag set to the object identifier. This event is missing the d tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 37800 requires a d tag set to the object identifier"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"display_name\":\"Alice\"}}",
+      "created_at" : 1744300900,
+      "id" : "ddee5566ddee5566ddee5566ddee5566ddee5566ddee5566ddee5566ddee5566",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677eeff6677",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "identity.profile"
+         ],
+         [
+            "overnet_ot",
+            "identity.profile"
+         ],
+         [
+            "overnet_oid",
+            "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "identity.profile"
+         ],
+         [
+            "o",
+            "identity.profile"
+         ]
+      ]
+   }
+}

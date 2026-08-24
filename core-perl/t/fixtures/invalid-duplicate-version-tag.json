@@ -1,0 +1,53 @@
+{
+   "description" : "Invalid: duplicate overnet_v tags are present. An Overnet core event MUST NOT include more than one overnet_v tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Duplicate overnet_v tag"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "3344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc00",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "3344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc003344cc00",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_v",
+            "0.2.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

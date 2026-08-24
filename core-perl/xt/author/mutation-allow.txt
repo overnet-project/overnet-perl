@@ -1,0 +1,71 @@
+# Reviewed-equivalent mutants for lib/Overnet/Authority/HostedChannel.pm.
+# Each block is one surviving Devel::Mutator diff (- mutated / + original) that a
+# human has judged to have no observable effect. See xt/author/mutation.t.
+
+# irc_mask_matches mask guard (line 36), && -> || : equivalent. Any mask the
+# mutated guard additionally admits is caught downstream: a reference or
+# overloaded mask makes irc_casefold return undef (its own !ref check) and is
+# rejected at the folded-defined guard, while an empty mask yields an empty
+# anchored pattern that the guaranteed-non-empty value can never match. Result
+# is 0 either way.
+-  if (!(defined $mask && !ref($mask) || length($mask))) {
++  if (!(defined $mask && !ref($mask) && length($mask))) {
+
+# irc_mask_matches mask guard (line 36), && -> || (first operator): equivalent
+# for the same reason as the sibling mask-guard mutant above.
+-  if (!(defined $mask || !ref($mask) && length($mask))) {
++  if (!(defined $mask && !ref($mask) && length($mask))) {
+
+# irc_mask_matches folded-value guard (line 45), && -> || : equivalent. mask and
+# value are already validated as defined, non-reference, non-empty scalars, so
+# irc_casefold always returns a defined value for both; the guard is never true
+# under either && or ||.
+-  if (!(defined $folded_mask || defined $folded_value)) {
++  if (!(defined $folded_mask && defined $folded_value)) {
+
+# authoritative_group_id folded-channel guard (line 69), && -> || : equivalent.
+# channel has already passed _is_channel_name, so irc_casefold returns a defined
+# string of length >= 2; the guard is never true under either && or ||.
+-  if (!(defined $folded_channel || length($folded_channel))) {
++  if (!(defined $folded_channel && length($folded_channel))) {
+
+# channel_name_from_group_id hex-capture guard (line 91), && -> || : equivalent.
+# $network_hex and $channel_hex come from the two mandatory capture groups of a
+# single regex match evaluated in list context, so they are either both defined
+# (match) or both undef (no match); && and || behave identically.
+-  if (!(defined $network_hex || defined $channel_hex)) {
++  if (!(defined $network_hex && defined $channel_hex)) {
+
+# resolve_nip29_group_binding FINAL group_id guard (line 160), && -> || :
+# equivalent. By this point $group_id is either a non-empty string or undef --
+# the line-153 fallback replaces any empty binding with the deterministic id or
+# undef -- and defined&&length agrees with defined||length for both of those.
+# (The visually identical line-153 guard IS a real gap; it is pinned by the
+# empty-configured-binding fallback test.)
+-  if (!(defined $group_id || length($group_id))) {
++  if (!(defined $group_id && length($group_id))) {
+
+# channel_name_from_group_event network guard (line 175), && -> || : equivalent.
+# Any network the mutated guard admits is passed straight into
+# channel_name_from_group_id, whose own unmutated network guard re-rejects
+# references, empty strings, and overloaded objects, yielding undef; the outer
+# result is undef either way. (The visually identical guards in
+# authoritative_group_id (line 61) and channel_name_from_group_id (line 84) ARE
+# real gaps and are pinned by dedicated tests.)
+-  if (!(defined $network && !ref($network) || length($network))) {
++  if (!(defined $network && !ref($network) && length($network))) {
+
+# channel_name_from_group_event network guard (line 175), && -> || (first
+# operator): equivalent for the same downstream-revalidation reason as above.
+-  if (!(defined $network || !ref($network) && length($network))) {
++  if (!(defined $network && !ref($network) && length($network))) {
+
+# channel_name_from_group_event name-tag guard (line 192), && -> || : equivalent.
+# The extra entries the || form admits (a name that is defined but not a channel
+# name) can never reach `return $first{name}`: that return requires
+# irc_casefold(name) eq irc_casefold(channel), and casefold preserves both the
+# leading #/& and the forbidden-character set, so such a name would itself be a
+# channel name and the && form would have entered too. With no path to the early
+# return, both forms fall through to `return $channel`.
+-  if (defined $first{name} || _is_channel_name($first{name})) {
++  if (defined $first{name} && _is_channel_name($first{name})) {

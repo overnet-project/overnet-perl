@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: adapted provenance is missing both external_identity and external_scope. A relay MUST reject this event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapted provenance must include external_identity or external_scope"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":\"irc\",\"origin\":\"irc.libera.chat/#overnet\",\"limitations\":[]},\"body\":{\"text\":\"Hello\"}}",
+      "created_at" : 1744300800,
+      "id" : "abab1111abab1111abab1111abab1111abab1111abab1111abab1111abab1111",
+      "kind" : 7800,
+      "pubkey" : "a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2",
+      "sig" : "cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222cdcd2222",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "irc:libera.chat:#overnet"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "irc:libera.chat:#overnet"
+         ]
+      ]
+   }
+}

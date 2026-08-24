@@ -1,0 +1,53 @@
+{
+   "description" : "Invalid: kind 7801 removal event uses the wrong overnet_et value. A kind 7801 event MUST use overnet_et value core.removal.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 7801 must use overnet_et value core.removal"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{}}",
+      "created_at" : 1744301000,
+      "id" : "bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88",
+      "kind" : 7801,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88bbccee88",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "e",
+            "a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2f3a1e2"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}

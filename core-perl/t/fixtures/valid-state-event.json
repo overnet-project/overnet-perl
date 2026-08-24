@@ -1,0 +1,48 @@
+{
+   "description" : "A valid Overnet State event (kind 37800) representing a user profile. The d tag must match the object identifier.",
+   "expected" : {
+      "overnet_valid" : true
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"display_name\":\"Alice\",\"bio\":\"Overnet early adopter\"}}",
+      "created_at" : 1744300900,
+      "id" : "455a6b63d345dbc1b873af258661befe4ee16962661dd59219982760f3d7d219",
+      "kind" : 37800,
+      "pubkey" : "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d",
+      "sig" : "436094841ce06a639f24437745e9dd938ba1ca7bd376e3c8e9172b739770b8a977c666f5bceea52e154b2a9b0c4b4edbb6f3032c5696616ee166ba1ab04c482d",
+      "tags" : [
+         [
+            "d",
+            "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "identity.profile"
+         ],
+         [
+            "overnet_ot",
+            "identity.profile"
+         ],
+         [
+            "overnet_oid",
+            "5a7adb15cdf6ae9bf6b3cff449aa1309242e96460d282d6f08a179f977e0787d"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "identity.profile"
+         ],
+         [
+            "o",
+            "identity.profile"
+         ]
+      ]
+   }
+}

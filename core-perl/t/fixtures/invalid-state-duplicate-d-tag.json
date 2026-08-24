@@ -1,0 +1,53 @@
+{
+   "description" : "Invalid: kind 37800 includes duplicate d tags. A kind 37800 event MUST include exactly one d tag.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Duplicate d tag"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"display_name\":\"Alice\"}}",
+      "created_at" : 1744300900,
+      "id" : "5566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee22",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "5566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee225566ee22",
+      "tags" : [
+         [
+            "d",
+            "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5"
+         ],
+         [
+            "d",
+            "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "identity.profile"
+         ],
+         [
+            "overnet_ot",
+            "identity.profile"
+         ],
+         [
+            "overnet_oid",
+            "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "identity.profile"
+         ],
+         [
+            "o",
+            "identity.profile"
+         ]
+      ]
+   }
+}

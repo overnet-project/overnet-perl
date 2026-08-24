@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: a kind 37800 adapter authority record whose overnet_et is core.adapter_authority but whose overnet_ot is not. An adapter authority record MUST use overnet_ot value core.adapter_authority per section 6.15.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapter authority record must use overnet_ot value core.adapter_authority"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"origin_match\":\"prefix\",\"pubkeys\":[\"a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2\"]}}",
+      "created_at" : 1744300800,
+      "id" : "cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007cafe0007",
+      "tags" : [
+         [
+            "d",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.adapter_authority"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.adapter_authority"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ]
+      ]
+   }
+}

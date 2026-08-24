@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: an adapted event whose provenance protocol is a JSON number rather than a string. Adapted provenance protocol MUST be a string per section 6.3.3.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapted provenance protocol must be a non-empty string"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"adapted\",\"protocol\":123,\"origin\":\"irc.libera.chat/#overnet\",\"external_identity\":\"alice\",\"limitations\":[\"unsigned\"]},\"body\":{\"text\":\"Hello from IRC!\"}}",
+      "created_at" : 1744300800,
+      "id" : "cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008cafe0008",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "chat.message"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "irc:libera.chat:#overnet"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "chat.message"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "irc:libera.chat:#overnet"
+         ]
+      ]
+   }
+}

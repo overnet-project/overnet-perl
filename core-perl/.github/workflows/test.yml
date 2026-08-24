@@ -1,0 +1,139 @@
+name: run-tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test.yml'
+      - '.perlcriticrc'
+      - '.perltidyrc'
+      - 'bin/**'
+      - 'lib/**'
+      - 'Makefile.PL'
+      - 't/**'
+      - 'xt/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/test.yml'
+      - '.perlcriticrc'
+      - '.perltidyrc'
+      - 'bin/**'
+      - 'lib/**'
+      - 'Makefile.PL'
+      - 't/**'
+      - 'xt/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        perl: ['5.40', 'latest']
+    name: Perl ${{ matrix.perl }}
+    env:
+      PERL5LIB: /home/runner/perl5/lib/perl5
+      PERL_LOCAL_LIB_ROOT: /home/runner/perl5
+      PERL_MB_OPT: --install_base /home/runner/perl5
+      PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: core-perl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/spec
+          path: spec
+
+      - uses: shogo82148/actions-setup-perl@v1
+        id: setup-perl
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/perl5
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('core-perl/Makefile.PL', 'core-perl/.github/workflows/test.yml') }}
+
+      - name: Install dependencies
+        run: |
+          # --notest: install dependencies without running their own test
+          # suites. CI tests core-perl, not its dependencies (which are
+          # verified by their own CI); running the full Net::Nostr suite,
+          # including its live-relay tests, during install makes a cold
+          # cache take tens of minutes.
+          cpanm --local-lib ~/perl5 --notest --installdeps ./core-perl
+          # Net::Nostr::Core ships the NIP-01 signature behavior our fixtures
+          # depend on. Its version floats (unversioned dependency), so force
+          # the latest release rather than reusing an older cached build.
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core
+          cpanm --local-lib ~/perl5 --notest --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+
+      - name: Run tests
+        working-directory: core-perl
+        run: |
+          prove -r -l -v t/
+          prove -r -l -v xt/author/
+
+  devel-cover:
+    runs-on: ubuntu-latest
+    name: Devel::Cover gate
+    timeout-minutes: 90
+    env:
+      PERL5LIB: /home/runner/perl5/lib/perl5:${{ github.workspace }}/irc-server/lib:${{ github.workspace }}/relay-perl/lib:${{ github.workspace }}/adapter-irc-perl/lib
+      PERL_LOCAL_LIB_ROOT: /home/runner/perl5
+      PERL_MB_OPT: --install_base /home/runner/perl5
+      PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: core-perl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/irc-server
+          path: irc-server
+
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/relay-perl
+          path: relay-perl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/adapter-irc-perl
+          path: adapter-irc-perl
+
+      - uses: actions/checkout@v4
+        with:
+          repository: overnet-project/spec
+          path: spec
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.40'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/perl5
+          key: perl-devel-cover-5.40-${{ hashFiles('core-perl/Makefile.PL', 'core-perl/.github/workflows/test.yml') }}
+
+      - name: Install dependencies
+        run: |
+          cpanm --local-lib ~/perl5 --notest --installdeps ./core-perl
+          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core
+          cpanm --local-lib ~/perl5 --notest --reinstall https://github.com/overnet-project/overnet-perl-style/archive/refs/heads/main.tar.gz
+          cpanm --local-lib ~/perl5 --notest Devel::Cover
+          echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
+
+      - name: Enforce per-file coverage floors
+        working-directory: core-perl
+        env:
+          OVERNET_COVERAGE: '1'
+        run: prove -l -v xt/author/devel-cover.t

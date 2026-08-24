@@ -1,0 +1,49 @@
+{
+   "description" : "An adapter authority record whose body.pubkeys contains a non-hex value is invalid.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapter authority record pubkeys must contain only 64-char lowercase hex"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"pubkeys\":[\"NOT-A-VALID-PUBKEY\"]}}",
+      "created_at" : 1744301100,
+      "id" : "d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9",
+      "tags" : [
+         [
+            "d",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.adapter_authority"
+         ],
+         [
+            "overnet_ot",
+            "core.adapter_authority"
+         ],
+         [
+            "overnet_oid",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.adapter_authority"
+         ],
+         [
+            "o",
+            "core.adapter_authority"
+         ]
+      ]
+   }
+}

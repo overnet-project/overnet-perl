@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: kind 37800 d tag value does not match overnet_oid. A relay MUST reject this event.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Kind 37800 d tag must match overnet_oid"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"display_name\":\"Alice\"}}",
+      "created_at" : 1744300900,
+      "id" : "aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122aabb1122",
+      "tags" : [
+         [
+            "d",
+            "wrong-value"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "identity.profile"
+         ],
+         [
+            "overnet_ot",
+            "identity.profile"
+         ],
+         [
+            "overnet_oid",
+            "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "identity.profile"
+         ],
+         [
+            "o",
+            "identity.profile"
+         ]
+      ]
+   }
+}

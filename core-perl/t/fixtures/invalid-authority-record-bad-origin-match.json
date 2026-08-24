@@ -1,0 +1,49 @@
+{
+   "description" : "An adapter authority record whose body.origin_match is neither exact nor prefix is invalid.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Adapter authority record origin_match must be exact or prefix"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"origin_match\":\"regex\",\"pubkeys\":[\"a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2\"]}}",
+      "created_at" : 1744301100,
+      "id" : "d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7f8d6e7",
+      "kind" : 37800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9b0c1a9",
+      "tags" : [
+         [
+            "d",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.adapter_authority"
+         ],
+         [
+            "overnet_ot",
+            "core.adapter_authority"
+         ],
+         [
+            "overnet_oid",
+            "irc:irc.libera.chat"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.adapter_authority"
+         ],
+         [
+            "o",
+            "core.adapter_authority"
+         ]
+      ]
+   }
+}

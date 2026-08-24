@@ -1,0 +1,49 @@
+{
+   "description" : "Invalid: core delegation event is missing the required delegate_pubkey field.",
+   "expected" : {
+      "overnet_valid" : false,
+      "reason" : "Core delegation missing required delegate_pubkey field"
+   },
+   "input" : {
+      "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"action\":\"remove\"}}",
+      "created_at" : 1744300950,
+      "id" : "2233445522334455223344552233445522334455223344552233445522334455",
+      "kind" : 7800,
+      "pubkey" : "b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5d6b4c5",
+      "sig" : "22334455223344552233445522334455223344552233445522334455223344552233445522334455223344552233445522334455223344552233445522334455",
+      "tags" : [
+         [
+            "overnet_v",
+            "0.1.0"
+         ],
+         [
+            "overnet_et",
+            "core.delegation"
+         ],
+         [
+            "overnet_ot",
+            "chat.channel"
+         ],
+         [
+            "overnet_oid",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ],
+         [
+            "v",
+            "0.1.0"
+         ],
+         [
+            "t",
+            "core.delegation"
+         ],
+         [
+            "o",
+            "chat.channel"
+         ],
+         [
+            "d",
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+         ]
+      ]
+   }
+}
