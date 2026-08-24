@@ -1,0 +1,196 @@
+# Equivalent mutants (no input can distinguish ORIG from MUT). Each entry is the
+# surviving mutation as a diff: the MUT line (prefixed -) then the ORIG line
+# (prefixed +), with a justification above it.
+
+# Numeric no-op: `$as_of + 0` and `$as_of - 0` both numify $as_of to the same
+# value (subtracting zero equals adding zero). The result is stored as a numeric
+# field, so no input can distinguish them.
+-            as_of   => $as_of - 0,
++            as_of   => $as_of + 0,
+
+# Numeric no-op: `$context->{created_at} + 0` vs `- 0` both numify created_at to
+# the identical value; there is no negation.
+-    created_at => $context->{created_at} - 0,
++    created_at => $context->{created_at} + 0,
+
+# Numeric no-op: `$context->{created_at} + 0` vs `- 0` both numify created_at to
+# the identical value; there is no negation.
+-      created_at         => $context->{created_at} - 0,
++      created_at         => $context->{created_at} + 0,
+
+# `@{$tag}[2 .. $last_index]` slices the role elements of a p tag. Enlarging the
+# upper bound past the last real index only appends undef elements. Both callers
+# either discard the roles entirely (remove-user) or route them through
+# _sorted_roles, which drops every value failing _non_empty_scalar (undef
+# included). The extra trailing undef(s) are always filtered out, so no input
+# distinguishes `- 1` from `+ 1`.
+-    my $last_index = scalar(@{$tag}) + 1;
++    my $last_index = scalar(@{$tag}) - 1;
+
+# `$parsed` is a hashref in every reachable state: it is initialised to {} and is
+# only reassigned from Net::Nostr::Group->metadata_from_event, which always
+# returns a hashref (the kind==39000 guard runs first and the sub returns \%meta).
+# If the eval dies mid-call the assignment never lands and $parsed keeps its
+# initial {}. Therefore `ref($parsed) ne 'HASH'` is always false, and both
+# `!$parse_ok || false` and `!$parse_ok && false` only ever guard a reset of an
+# already-{} value. No input distinguishes || from &&.
+-  if (!$parse_ok && ref($parsed) ne 'HASH') {
++  if (!$parse_ok || ref($parsed) ne 'HASH') {
+
+# The mutated first clause `$kind == 39_000 && $kind == 39_001` is always false,
+# so kinds 39_000 and 39_001 return semantic phase 4 instead of 3. Phase is used
+# only to order authoritative events. Moving 39_000/39_001 from phase 3 to the
+# maximum phase 4 keeps them ordered after every lower-phase event they could
+# conflict with, and phase-4 kinds have no state handler, so their relative order
+# is unobservable. Against the other phase-3 kinds (39_002 members, 39_003 roles)
+# the 39_000/39_001 writes are disjoint or idempotent (admins/members resolve a
+# pubkey to the same roles regardless of order; tombstone metadata dominates), so
+# no reachable input changes the derived state.
+-  if ($kind == 39_000 && $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# `$roles` is only ever an arrayref or undef at both call sites (a literal
+# \@roles, or a member's roles field which is itself always an arrayref or
+# absent). `||=` and `//=` differ only for a defined-but-falsy scalar (0 or ''),
+# which never occurs here; undef and truthy arrayrefs behave identically under
+# both operators.
+-  $roles //= [];
++  $roles ||= [];
+
+# _nip29_group_ref_pubkey_from_event only supplies the group-ref pubkey. This
+# variant differs from ORIG only when the event group id is defined and differs
+# from the bound group id. But any authoritative event whose group id differs
+# from the bound group id makes _apply_authoritative_channel_event return
+# 'authoritative event group mismatch', failing the entire derivation before any
+# group ref becomes observable. In every successful derivation the event group id
+# equals the bound group id (both defined and equal), for which ORIG and this
+# mutant return the pubkey identically. No reachable input distinguishes them.
+-  if (!(defined($event_group_id) || defined($group_id) && $event_group_id eq $group_id)) {
++  if (!(defined($event_group_id) && defined($group_id) && $event_group_id eq $group_id)) {
+
+# Same reasoning as the previous entry: the group-id mismatch that would
+# distinguish this mutant from ORIG always aborts the derivation with an
+# 'authoritative event group mismatch' error before the group ref is observable,
+# and the matching case is identical for both. No reachable input distinguishes
+# `&& ... ||` from `&& ... &&`.
+-  if (!(defined($event_group_id) && defined($group_id) || $event_group_id eq $group_id)) {
++  if (!(defined($event_group_id) && defined($group_id) && $event_group_id eq $group_id)) {
+
+# Numeric no-op: `$args{created_at} + 0` vs `- 0` both numify created_at to the
+# identical value (subtracting zero equals adding zero); there is no negation.
+# This is the $args{created_at} spelling of the same idiom used across the
+# event-hash builders.
+-    created_at => $args{created_at} - 0,
++    created_at => $args{created_at} + 0,
+
+# _authority_ordering_from_event runs over the tags of a validated
+# Net::Nostr::Event (built at the top of _sorted_authoritative_group_events),
+# and Net::Nostr::Event->new rejects any tag whose elements are not defined
+# strings ("tag elements must be defined strings"). So $tag->[1] here is always a
+# defined non-ref scalar, making `!ref($tag->[1])` always true. `X && true` and
+# `X || true` both reduce to the same value whenever X (`defined($tag->[1])`) is
+# itself always true, which it is for a tag that passed _tag_has_value. No
+# reachable input distinguishes `&&` from `||`.
+-      $authority = defined($tag->[1]) || !ref($tag->[1]) ? $tag->[1] : q{};
++      $authority = defined($tag->[1]) && !ref($tag->[1]) ? $tag->[1] : q{};
+
+# _apply_group_metadata_tag is only ever called with tags drawn from a validated
+# Net::Nostr::Event's ->tags, so every tag is an arrayref (non-array tags are
+# rejected by Net::Nostr::Event with "each tag must be an arrayref of strings").
+# `ref($tag) ne 'ARRAY'` is therefore always false, reducing the guard to
+# `false || !@{$tag}` (ORIG) vs `false && !@{$tag}` (MUT). They differ only for an
+# empty tag `[]`, and there both behave as a no-op: ORIG returns early, while MUT
+# falls through to `$handler_for{$tag->[0]}` with $tag->[0] undef, finds no
+# handler, and returns without touching the metadata. No input distinguishes them.
+-  if (ref($tag) ne 'ARRAY' && !@{$tag}) {
++  if (ref($tag) ne 'ARRAY' || !@{$tag}) {
+
+# Semantic phase only breaks ties among authoritative events sharing a created_at
+# once the authority-sequence tiebreak yields nothing. Every mutation below moves
+# a kind-39_00x snapshot (and/or an unknown kind) to phase 4 (the maximum) while
+# leaving the phase 0/1/2 action events untouched, so the snapshot still sorts
+# after every put/join/remove/leave it could conflict with. Phase 4 kinds have no
+# state handler, so their order is unobservable, and among the phase-3 snapshots
+# the writes are disjoint or idempotent: metadata writes metadata{}, roles writes
+# supported_roles, members adds a pubkey to members{} only when absent, and admins
+# overwrites members{pubkey} unconditionally — so for any shared pubkey the two
+# orderings converge on the same roles, and for disjoint pubkeys order is
+# irrelevant. No reachable input distinguishes these from ORIG.
+-  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 && $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# Same reasoning as the previous entry: 39_001 (admins) is pushed to phase 4 and
+# unknown kinds to phase 3 (unknown kinds have no handler, so their phase is
+# unobservable). Admins ordering versus the other phase-3 snapshots is idempotent
+# (shared pubkey) or disjoint, so no reachable input distinguishes it from ORIG.
+-  if ($kind == 39_000 || $kind != 39_001 || $kind == 39_002 || $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# Same reasoning: 39_002 (members) is pushed to phase 4 and unknown kinds to phase
+# 3 (no handler). The members snapshot only adds pubkeys to members{} when absent,
+# which is disjoint from metadata/roles and idempotent with admins, so ordering it
+# after the other phase-3 snapshots changes nothing observable.
+-  if ($kind == 39_000 || $kind == 39_001 || $kind != 39_002 || $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# Same reasoning: 39_003 (roles) is pushed to phase 4 and unknown kinds to phase 3
+# (no handler). Roles only writes supported_roles, disjoint from every other
+# phase-3 snapshot, so reordering it is unobservable.
+-  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind != 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# Same reasoning, both admins (39_001) and members (39_002) pushed to phase 4 at
+# once: the `&&` binds tighter, so `39_001 && 39_002` is always false and both
+# kinds drop from phase 3 to the phase-4 maximum. Their order relative to EACH
+# OTHER is unchanged (in ORIG both were phase 3, in the mutant both are phase 4,
+# so the created_at/authority/id tiebreak decides identically). Relative to the
+# remaining phase-3 snapshots (39_000 metadata, 39_003 roles) their writes are
+# disjoint (members{} vs metadata{} vs supported_roles), and admins-vs-members on
+# a shared pubkey converges (admins overwrites roles; members only adds when
+# absent). No reachable input distinguishes it from ORIG.
+-  if ($kind == 39_000 || $kind == 39_001 && $kind == 39_002 || $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# `$kind == 39_000` becomes `$kind != 39_000`, so every kind that reaches this
+# guard EXCEPT 39_000 returns phase 3, while 39_000 (metadata) itself drops to the
+# phase-4 default. Two effects, both unobservable: (a) unknown kinds move from
+# phase 4 to phase 3, but unknown kinds have no state handler so their sort
+# position never changes derived state; (b) metadata moves from phase 3 to phase 4
+# — still after every phase-0/1/2 action event, and disjoint from members{},
+# supported_roles, and admins. The only interaction that could care about order is
+# a tombstone metadata event, but tombstoning clears present_members/pending
+# (populated solely by lower phases that always precede it) while members{} is
+# retained regardless of order, so the derived state is identical either way
+# (verified against a members+tombstone pair sharing a created_at).
+-  if ($kind != 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
++  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
+
+# In _apply_view_authoritative_admission the view is built by
+# derive_authoritative_channel_view(%args) from the SAME args, and that builder
+# sets $view{admission} to a hashref if and only if $args->{actor_pubkey} is
+# defined (the one assignment guarded by `defined $args->{actor_pubkey}`). So
+# `defined($args->{actor_pubkey})` and `ref($view->{admission}) eq 'HASH'` are
+# perfectly correlated: both true together or both false together. When two
+# operands are always equal, `A && B`, `A`, `B`, and `A || B` all yield the same
+# value, so no reachable input distinguishes `&&` from `||`.
+-  if (defined($args->{actor_pubkey}) || ref($view->{admission}) eq 'HASH') {
++  if (defined($args->{actor_pubkey}) && ref($view->{admission}) eq 'HASH') {
+
+# Numeric no-op: `$args->{created_at} + 0` vs `- 0` both numify created_at to the
+# identical value (subtracting zero equals adding zero); there is no negation.
+# This is the six-space-indented `$args->{created_at}` spelling used by the
+# non-authoritative event-hash builders.
+-      created_at => $args->{created_at} - 0,
++      created_at => $args->{created_at} + 0,
+
+# Numeric no-op: `$event->created_at + 0` vs `- 0` both numify the event's
+# created_at to the identical value; there is no negation. This is the decorated
+# sort key built in _sorted_authoritative_group_events.
+-      $event->created_at - 0,
++      $event->created_at + 0,
+
+# Numeric no-op: `$context->{created_at} + 0` vs `- 0` both numify created_at to
+# the same value (this is the 4-space, column-aligned spelling; distinct source
+# lines with identical text share one signature).
+-    created_at         => $context->{created_at} - 0,
++    created_at         => $context->{created_at} + 0,

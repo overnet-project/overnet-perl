@@ -1,0 +1,23 @@
+.gitignore
+CLAUDE.md
+lib/Overnet/Adapter/IRC.pm
+lib/Overnet/Adapter/IRC/InputMapper.pm
+lib/Overnet/Adapter/IRC/NIP29.pm
+lib/Overnet/Adapter/IRC/Presence.pm
+lib/Overnet/Adapter/IRC/Role/Validation.pm
+LICENSE
+Makefile.PL
+MANIFEST			This list of files
+MANIFEST.SKIP
+README.md
+t/00-load.t
+t/10-privmsg-fixtures.t
+t/20-derived-presence-fixtures.t
+t/30-nip29-authoritative.t
+t/40-spec-conformance.t
+t/50-profile-contracts.t
+t/component-boundaries.t
+t/input-validation.t
+t/makemaker-metadata.t
+t/manifest-skip-policy.t
+t/shared-perl-layout.t
