@@ -1,0 +1,101 @@
+name: run-tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 't/**'
+      - 'xt/**'
+      - 'Makefile.PL'
+      - 'configs/**'
+      - 'tools/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 't/**'
+      - 'xt/**'
+      - 'Makefile.PL'
+      - 'configs/**'
+      - 'tools/**'
+      - '.github/workflows/test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        perl: ['5.40', 'latest']
+    name: Perl ${{ matrix.perl }}
+    env:
+      PERL5LIB: /home/runner/perl5/lib/perl5
+      PERL_LOCAL_LIB_ROOT: /home/runner/perl5
+      PERL_MB_OPT: --install_base /home/runner/perl5
+      PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shogo82148/actions-setup-perl@v1
+        id: setup-perl
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/perl5
+          key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('Makefile.PL', '.github/workflows/test.yml') }}
+
+      - name: Install dependencies
+        run: |
+          cpanm --local-lib ~/perl5 --installdeps .
+          # Devel::Mutator is not a dist dependency; it is installed here only so
+          # t/author-mutation-template.t can functionally exercise the mutation
+          # template instead of skipping its behavioural checks.
+          cpanm --local-lib ~/perl5 --notest Devel::Mutator
+
+      - name: Run tests
+        run: |
+          prove -r -l -v t/
+
+      - name: Run author tests
+        run: |
+          prove -r -l -v xt/author/
+
+  devel-cover:
+    runs-on: ubuntu-latest
+    name: Devel::Cover gate
+    timeout-minutes: 90
+    env:
+      PERL5LIB: /home/runner/perl5/lib/perl5
+      PERL_LOCAL_LIB_ROOT: /home/runner/perl5
+      PERL_MB_OPT: --install_base /home/runner/perl5
+      PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.40'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/perl5
+          key: perl-devel-cover-5.40-${{ hashFiles('Makefile.PL', '.github/workflows/test.yml') }}
+
+      - name: Install dependencies
+        run: |
+          cpanm --local-lib ~/perl5 --installdeps .
+          cpanm --local-lib ~/perl5 --notest Devel::Cover
+          echo "$HOME/perl5/bin" >> "$GITHUB_PATH"
+
+      - name: Enforce per-file coverage floors
+        env:
+          OVERNET_COVERAGE: '1'
+        run: prove -l -v xt/author/devel-cover.t
