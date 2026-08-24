@@ -37,6 +37,8 @@ ok -x $quadlet_check,                   'quadlet-check script is executable';
 ok -f $workflow,                        'container-build workflow exists';
 
 my $workflow_text = _slurp($workflow);
+like $workflow_text, qr{apt-get\s+install[^\n]*\bpodman\b}mx,
+  'workflow installs the complete Podman package for Quadlet validation';
 like $workflow_text, qr{podman\s+build}mx,
   'workflow builds the image';
 like $workflow_text, qr{\bContainerfile\b}mx,
