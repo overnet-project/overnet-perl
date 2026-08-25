@@ -1,0 +1,5 @@
+.git
+**/.git
+relay-perl/deploy/podman/*
+!relay-perl/deploy/podman/entrypoint.pl
+relay-perl/t/deploy-podman-packaging.t

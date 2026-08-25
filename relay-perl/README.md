@@ -18,6 +18,14 @@ This distribution owns:
 
 Shared core validation and runtime code live in [core-perl](https://github.com/overnet-project/overnet-perl/tree/main/core-perl).
 
+## Container Deployment
+
+The relay includes a minimal, security-focused container image and rootless
+Podman Quadlet units for its generic and authority roles. See the
+[Podman and Quadlet deployment guide](deploy/podman/README.md) for image builds,
+installation, configuration, persistence, security controls, and automated
+Fedora base-image updates.
+
 ## Tests
 
 Run the full relay-heavy verification path with:

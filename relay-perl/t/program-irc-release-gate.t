@@ -14,7 +14,6 @@ sub _slurp {
 my $root   = File::Spec->catdir($FindBin::Bin, '..');
 my $script = File::Spec->catfile($root, 'bin', 'overnet-release-gate.pl');
 my $readme = File::Spec->catfile($root, 'README.md');
-my $agents = File::Spec->catfile($root, 'AGENTS.md');
 
 ok(-f $script, 'default IRC release gate script exists');
 
@@ -34,10 +33,10 @@ unlike $script_text, qr/local\/lib\/perl5/mx,               'release gate does n
 like $script_text,   qr/\$EXECUTABLE_NAME/mx,               'release gate reuses the current project Perl executable';
 like $script_text,   qr/'-S',\s*'prove'/mx,                 'release gate finds prove through the current Perl';
 
-for my $doc (['README', _slurp($readme)], ['AGENTS', _slurp($agents)],) {
-  my ($label, $text) = @{$doc};
-  like $text, qr/default\ release\ gate/imx,       "$label identifies the default release gate";
-  like $text, qr/bin\/overnet-release-gate\.pl/mx, "$label points to the release gate script";
-}
+my $readme_text = _slurp($readme);
+like $readme_text, qr/default\ release\ gate/imx,
+  'README identifies the default release gate';
+like $readme_text, qr/bin\/overnet-release-gate\.pl/mx,
+  'README points to the release gate script';
 
 done_testing;

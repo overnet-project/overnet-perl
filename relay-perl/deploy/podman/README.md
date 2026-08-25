@@ -6,7 +6,7 @@ units so it can be run and supervised as a rootless `systemd --user` service.
 
 One image serves **two relay roles**, selected by which Quadlet unit you install:
 
-- The **generic relay** — the `overnet-relay-service.pl` entrypoint, serving the
+- The **generic relay** — the `overnet-relay.pl` entrypoint, serving the
   Overnet relay protocol (publish, query, subscribe, sync, object read) with a
   persistent on-disk event store.
 - The **authority relay** — the `overnet-authority-relay.pl` entrypoint, an
@@ -18,9 +18,10 @@ One image serves **two relay roles**, selected by which Quadlet unit you install
 
 | File | Purpose |
 | --- | --- |
-| `Containerfile` | Builds the relay image from sibling `core-perl/` + `relay-perl/` checkouts. |
+| `Containerfile` | Builds the minimal relay image from `core-perl/` and `relay-perl/`. |
+| `entrypoint.pl` | Dispatches directly to the generic or authority relay without a shell. |
 | `overnet-relay.container` / `overnet-relay.volume` | Quadlet units for the generic relay. |
-| `overnet-authority-relay.container` / `overnet-authority-relay.volume` | Quadlet units for the authority relay (same image, different entrypoint). |
+| `overnet-authority-relay.container` / `overnet-authority-relay.volume` | Quadlet units for the authority relay (same image, different role). |
 
 ## Why podman + Quadlet
 
@@ -31,27 +32,49 @@ and no root. Everything below runs as an ordinary user.
 
 ## Prerequisites
 
-- `podman` 4.4+ (Quadlet support) with the `systemd --user` session usable.
+- `podman` 4.9+ with the `systemd --user` session usable.
   For a login-independent service, enable lingering: `loginctl enable-linger`.
-- A workspace containing sibling `core-perl/` and `relay-perl/` checkouts.
-  Overnet core is used from its source tree (it is not on CPAN), so both
-  repositories must be present in the build context.
+- The `overnet-perl` monorepo checkout. The repository root, containing both
+  `core-perl/` and `relay-perl/`, is the container build context.
 
 ## Build the image
 
-Run from the workspace directory that holds both checkouts:
+Run from the `overnet-perl` repository root:
 
 ```bash
 podman build \
   --file relay-perl/deploy/podman/Containerfile \
-  --tag overnet-relay:latest \
+  --tag localhost/overnet-relay:latest \
   .
 ```
 
-The build installs the core and relay CPAN prerequisites, then copies both
-source trees to `/opt/overnet`. The relay resolves core at
-`/opt/overnet/core-perl/lib` via the entrypoint's `use lib` fallback, so the
-sibling layout inside the image mirrors the development layout.
+The Fedora Minimal builder is pinned to one literal major-release tag and
+digest in the `Containerfile`. It is used only to build and test the Perl
+distributions and assemble the runtime RPM closure. The final image starts from
+`scratch`; it contains the Fedora Perl runtime, required shared libraries and
+certificates, installed CPAN and Overnet modules, and the two service scripts.
+It does not contain the source trees, package manager, compiler, build tools,
+shell, or build-only `Alien::cmake3` payload.
+
+## Runtime security
+
+The final image runs as numeric UID/GID `10001:10001`. Both Quadlet units make
+the image read-only, provide only the normal Podman runtime tmpfs mounts, set
+`no-new-privileges`, drop every Linux capability, and cap the service at 256
+processes. The named event-store volume is the only persistent writable path.
+
+The Fedora base uses one literal release-and-digest reference so rebuilds
+cannot silently select a different base, and the runtime package repository
+release is derived from that image's RPM metadata. Dependabot checks the
+`Containerfile` weekly and proposes reviewed release or digest updates. The
+container workflow also performs a complete scheduled rebuild every week so
+the current Fedora package set continues to pass both relay smoke tests.
+
+Production builds never use `latest` for their base. Fedora major-version
+updates land through reviewed pull requests and must pass the same image,
+runtime, and Quadlet checks as application changes. The Quadlet health checks
+use JSON exec form to invoke `/usr/bin/perl` directly, which preserves health
+monitoring without adding a shell.
 
 ## Install and start the service (rootless)
 
@@ -83,7 +106,8 @@ inside the store volume:
 journalctl --user -u overnet-relay | grep '\[relay.health\]'
 
 # The health file reports ready/stopping/stopped with the listen address:
-podman exec overnet-relay cat /var/lib/overnet/relay/health.json
+podman exec overnet-relay \
+  perl -0777 -pe 1 /var/lib/overnet/relay/health.json
 ```
 
 The Quadlet unit also defines a podman health check that opens a TCP
@@ -92,8 +116,8 @@ demand.
 
 ## Configuration
 
-Tuning knobs are the `overnet-relay-service.pl` arguments on the unit's
-`Exec=` line. Edit them in place, then reload:
+Tuning knobs are the `overnet-relay.pl` arguments after the `relay` role on the
+unit's `Exec=` line. Edit them in place, then reload:
 
 ```bash
 $EDITOR ~/.config/containers/systemd/overnet-relay.container
@@ -111,7 +135,8 @@ Commonly adjusted arguments:
 | `--service-policy NAME=VALUE` | Per-operation access policy (`publish`, `query`, `subscribe`, `sync`, `object_read`). |
 | `--store-file` | Store path; must stay inside the mounted volume. |
 
-Run `podman run --rm overnet-relay:latest --help` for the full argument list.
+Run `podman run --rm localhost/overnet-relay:latest relay --help` for the full
+argument list. Replace `relay` with `authority` for the authority relay.
 
 ## Persistence
 
@@ -137,9 +162,8 @@ should be fronted as `wss://`.
 
 ## Authority relay (hosted NIP-29 channels)
 
-The `overnet-authority-relay.container` unit runs the **same image** with its
-entrypoint overridden to launch the authority relay. Install it exactly like
-the generic relay:
+The `overnet-authority-relay.container` unit runs the **same image** and selects
+its `authority` role. Install it exactly like the generic relay:
 
 ```bash
 cp relay-perl/deploy/podman/overnet-authority-relay.container \
@@ -167,7 +191,10 @@ Point an IRC server at it with `--authority-relay-url ws://<host>:7448` (see
 Rebuild the image and restart:
 
 ```bash
-podman build --file relay-perl/deploy/podman/Containerfile --tag overnet-relay:latest .
+podman build \
+  --file relay-perl/deploy/podman/Containerfile \
+  --tag localhost/overnet-relay:latest \
+  .
 systemctl --user restart overnet-relay
 ```
 

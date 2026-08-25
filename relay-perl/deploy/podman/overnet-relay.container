@@ -20,6 +20,14 @@ Wants=network-online.target
 ContainerName=overnet-relay
 Image=localhost/overnet-relay:latest
 
+# The service has no reason to modify the image or acquire Linux capabilities.
+# Podman supplies writable tmpfs mounts for normal runtime scratch paths.
+ReadOnly=true
+ReadOnlyTmpfs=true
+NoNewPrivileges=true
+DropCapability=all
+PidsLimit=256
+
 # Persistent event store. The reference must match the sibling unit's file
 # name (overnet-relay.volume); that unit sets VolumeName=overnet-relay-store,
 # so the actual podman volume is named overnet-relay-store. The mount path
@@ -31,10 +39,10 @@ Volume=overnet-relay.volume:/var/lib/overnet/relay:Z
 # address (for example 0.0.0.0:7447:7447) to expose it directly.
 PublishPort=127.0.0.1:7447:7447
 
-# Relay invocation. The image entrypoint is overnet-relay-service.pl; these
-# arguments configure it. The --store-file path must stay inside the mounted
+# Relay invocation. The image entrypoint dispatches this role directly to the
+# generic relay script. The --store-file path must stay inside the mounted
 # volume above so events survive container restarts.
-Exec=--host 0.0.0.0 --port 7447 \
+Exec=relay --host 0.0.0.0 --port 7447 \
   --name "Overnet Relay" \
   --description "Public Overnet relay" \
   --relay-profile volunteer-basic \
@@ -49,8 +57,8 @@ Exec=--host 0.0.0.0 --port 7447 \
   --service-policy object_read=open
 
 # Liveness probe: the relay's WebSocket listener must accept a TCP connection.
-# IO::Socket::INET is a core module, so this needs nothing beyond perl.
-HealthCmd=perl -MIO::Socket::INET -e "IO::Socket::INET->new(PeerAddr => '127.0.0.1:7447', Timeout => 3) or exit 1"
+# JSON array form executes Perl directly; the image intentionally has no shell.
+HealthCmd=["/usr/bin/perl","-MIO::Socket::INET","-e","IO::Socket::INET->new(PeerAddr => q(127.0.0.1:7447), Timeout => 3) or exit 1"]
 HealthInterval=30s
 HealthTimeout=5s
 HealthStartPeriod=10s

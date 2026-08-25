@@ -38,4 +38,4 @@ the same project Perl and active monorepo sources. For example:
 plx bash -c 'cd overnet-burner && prove -r -l t/ xt/author/'
 ```
 
-Read the root and component `AGENTS.md` files before changing a component.
+Consult the relevant component README and tests before changing a component.

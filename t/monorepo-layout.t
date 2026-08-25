@@ -76,6 +76,8 @@ like $readme, qr{https://github[.]com/overnet-project/overnet-burner}mx,
   'the monorepo README links to the standalone Burner repository';
 unlike $readme, qr{overnet-perl/tree/main/overnet-burner}mx,
   'the monorepo README does not claim Burner as a monorepo distribution';
+unlike $readme, qr{\bAGENTS[.]md\b}mx,
+  'the monorepo README does not reference removed AGENTS.md files';
 
 done_testing;
 

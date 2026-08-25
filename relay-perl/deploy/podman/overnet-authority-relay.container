@@ -1,8 +1,8 @@
 # Quadlet unit for the Overnet authority relay (rootless podman).
 #
-# This runs the SAME image as the generic relay (overnet-relay), but overrides
-# the entrypoint to launch the authoritative hosted-channel (NIP-29) relay
-# instead. Build the image once from relay-perl/deploy/podman/Containerfile.
+# This runs the SAME image as the generic relay (overnet-relay), selecting the
+# authoritative hosted-channel (NIP-29) role through its direct Perl
+# entrypoint. Build the image once from relay-perl/deploy/podman/Containerfile.
 #
 # Install into the systemd unit search path and reload:
 #
@@ -22,10 +22,13 @@ Wants=network-online.target
 ContainerName=overnet-authority-relay
 Image=localhost/overnet-relay:latest
 
-# Launch the authority relay entrypoint from the shared relay image. The
-# entrypoint is overridden via PodmanArgs rather than the Quadlet Entrypoint=
-# key, which only exists in podman 5.0+; PodmanArgs works on older Quadlet too.
-PodmanArgs=--entrypoint=perl
+# The service has no reason to modify the image or acquire Linux capabilities.
+# Podman supplies writable tmpfs mounts for normal runtime scratch paths.
+ReadOnly=true
+ReadOnlyTmpfs=true
+NoNewPrivileges=true
+DropCapability=all
+PidsLimit=256
 
 # Persistent event store. The reference must match the sibling unit's file name
 # (overnet-authority-relay.volume); that unit sets
@@ -45,7 +48,7 @@ PublishPort=127.0.0.1:7448:7448
 # By design NO snapshot pubkey is trusted by default, which means every 39xxx
 # group-metadata snapshot is rejected until you authorize one or more snapshot
 # signers with repeated --snapshot-pubkey <64-hex> arguments.
-Exec=/opt/overnet/relay-perl/bin/overnet-authority-relay.pl \
+Exec=authority \
   --host 0.0.0.0 \
   --port 7448 \
   --relay-url ws://127.0.0.1:7448 \
@@ -54,8 +57,8 @@ Exec=/opt/overnet/relay-perl/bin/overnet-authority-relay.pl \
   --health-file /var/lib/overnet/authority-relay/health.json
 
 # Liveness probe: the authority relay's WebSocket listener must accept a TCP
-# connection. IO::Socket::INET is a core module, so this needs nothing but perl.
-HealthCmd=perl -MIO::Socket::INET -e "IO::Socket::INET->new(PeerAddr => '127.0.0.1:7448', Timeout => 3) or exit 1"
+# connection. JSON array form executes Perl directly without a shell.
+HealthCmd=["/usr/bin/perl","-MIO::Socket::INET","-e","IO::Socket::INET->new(PeerAddr => q(127.0.0.1:7448), Timeout => 3) or exit 1"]
 HealthInterval=30s
 HealthTimeout=5s
 HealthStartPeriod=10s

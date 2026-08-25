@@ -14,6 +14,7 @@ deploy/canary/relay-sync-b-to-a/relay-sync.json.example
 deploy/systemd/overnet-relay-sync@.service
 deploy/systemd/overnet-relay-sync@.timer
 deploy/podman/Containerfile
+deploy/podman/entrypoint.pl
 deploy/podman/README.md
 deploy/podman/overnet-authority-relay.container
 deploy/podman/overnet-authority-relay.volume

@@ -1,71 +1,214 @@
-# Overnet relay container image (rootless podman friendly).
+# Security-focused Overnet relay image.
 #
-# The relay entrypoint resolves the Overnet core library from a sibling
-# checkout at ../../core-perl/lib relative to bin/. Overnet core is not
-# published to CPAN, so it is used directly from its source tree rather than
-# installed as a distribution. The build context must therefore contain both
-# `core-perl/` and `relay-perl/` as sibling directories, exactly as they are
-# laid out in a normal Overnet workspace.
-#
-# Build (run from the workspace directory that holds both checkouts):
+# Fedora Minimal is used only as a builder and package-closure assembler. The
+# final image starts from scratch and receives the runtime RPM closure, tested
+# CPAN modules, installed Overnet modules, and the relay service entrypoints.
+# Build from the overnet-perl monorepo root:
 #
 #   podman build \
 #     --file relay-perl/deploy/podman/Containerfile \
-#     --tag overnet-relay:latest \
+#     --tag localhost/overnet-relay:latest \
 #     .
-#
-FROM docker.io/library/perl:5.40-slim
 
-# Overnet core is consumed from its source tree, so it must be visible on
-# @INC before cpanm resolves the relay's `Overnet` prerequisite; otherwise
-# cpanm would try (and fail) to fetch it from CPAN.
-ENV OVERNET_ROOT=/opt/overnet
-ENV PERL5LIB=/opt/overnet/core-perl/lib
+FROM quay.io/fedora/fedora-minimal:44@sha256:4190fe8f01fceecea7bb6c004210da2164cb292057283cfbfeff0d708f389fc5 AS builder
 
-# Toolchain for XS prerequisites (CryptX, IO::Socket::SSL, ...).
-RUN apt-get update \
-  && apt-get install --yes --no-install-recommends \
-       build-essential \
-       libssl-dev \
-       libgmp-dev \
-       zlib1g-dev \
-  && rm -rf /var/lib/apt/lists/*
+# Build-only packages never cross into the final image. Weak dependencies are
+# disabled so the toolchain is explicit and reviewable.
+RUN dnf5 --assumeyes \
+      --setopt=install_weak_deps=False \
+      install \
+        ca-certificates \
+        findutils \
+        gcc \
+        glibc-devel \
+        gmp-devel \
+        gzip \
+        make \
+        openssl-devel \
+        patch \
+        perl-App-cpanminus \
+        perl-devel \
+        tar \
+        zlib-ng-compat-devel \
+  && dnf5 clean all
 
-# Net::Nostr::Core requires Crypt::PK::ECC::Schnorr. That distribution is on
-# CPAN (author GUL) but is not indexed under its module name, because CryptX
-# owns the Crypt::PK::ECC namespace, so cpanm cannot resolve it by name during
-# --installdeps and bails. Install it explicitly by author path first; doing so
-# also pulls its Math::GMPz (hence libgmp-dev above) and CryptX prerequisites,
-# so the later --installdeps finds the module already present.
-RUN cpanm --notest GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz
+# JSON::Schema::Modern's conformance-test dependency uses a local git
+# repository while configuring. Git remains confined to the builder.
+RUN dnf5 --assumeyes \
+      --setopt=install_weak_deps=False \
+      install git-core \
+  && dnf5 clean all
 
-WORKDIR /opt/overnet
-COPY core-perl /opt/overnet/core-perl
-COPY relay-perl /opt/overnet/relay-perl
+WORKDIR /build
+COPY core-perl core-perl
+COPY relay-perl relay-perl
 
-RUN cpanm --notest --installdeps /opt/overnet/core-perl \
-  && cpanm --notest --installdeps /opt/overnet/relay-perl \
+# Crypt::PK::ECC::Schnorr is not indexed under its module name. Dependency
+# tests are intentionally enabled for it and for every normal prerequisite.
+RUN cpanm GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
+  && cpanm --installdeps /build/core-perl \
+  && cd /build/core-perl \
+  && perl Makefile.PL \
+  && make test \
+  && make pure_install \
+  && cpanm --installdeps /build/relay-perl \
+  && cd /build/relay-perl \
+  && perl Makefile.PL \
+  && make test \
+  && make pure_install \
+  && cpanm --notest --local-lib-contained /runtime-local \
+      GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
+  && cpanm --notest --local-lib-contained /runtime-local \
+      --installdeps /build/core-perl \
+  && cd /build/core-perl \
+  && make realclean \
+  && PERL5LIB=/runtime-local/lib/perl5 \
+      perl Makefile.PL INSTALL_BASE=/runtime-local \
+  && make pure_install \
+  && cpanm --notest --local-lib-contained /runtime-local \
+      --installdeps /build/relay-perl \
+  && cd /build/relay-perl \
+  && make realclean \
+  && PERL5LIB=/runtime-local/lib/perl5 \
+      perl Makefile.PL INSTALL_BASE=/runtime-local \
+  && make pure_install \
+  && rm -rf \
+      /runtime-local/bin \
+      /runtime-local/man \
+      /runtime-local/share/man \
   && rm -rf /root/.cpanm
 
-# Run as an unprivileged in-container account, matching the rootless model,
-# and pre-create the store directory owned by that account.
-RUN useradd --create-home --uid 10001 overnet \
-  && mkdir -p /var/lib/overnet/relay \
-  && chown -R overnet:overnet /var/lib/overnet
-USER overnet
+FROM builder AS runtime-assembler
 
-# Persistent event store lives on a mounted volume.
-VOLUME /var/lib/overnet/relay
+# Assemble only runtime RPMs and their hard dependency closure. The RPM
+# database remains in the image so scanners can identify every Fedora file.
+# Deriving releasever from the pinned builder prevents its tag and the package
+# repository release from drifting apart.
+RUN FEDORA_VERSION="$(rpm -E '%{fedora}')" \
+  && mkdir -p /runtime-root \
+  && dnf5 --installroot=/runtime-root \
+      --releasever="${FEDORA_VERSION}" \
+      --use-host-config \
+      --assumeyes \
+      --no-docs \
+      --setopt=install_weak_deps=False \
+      install \
+        ca-certificates \
+        gmp \
+        openssl-libs \
+        perl-Compress-Raw-Zlib \
+        perl-Digest-SHA \
+        perl-English \
+        perl-experimental \
+        perl-File-Copy \
+        perl-FindBin \
+        perl-interpreter \
+        perl-IO-Compress \
+        perl-JSON-PP \
+        perl-lib \
+        perl-Math-BigInt \
+        perl-Net-SSLeay \
+        perl-Params-Util \
+        perl-subs \
+        perl-version \
+        zlib-ng-compat \
+  && dnf5 --installroot=/runtime-root \
+      --releasever="${FEDORA_VERSION}" \
+      --use-host-config \
+      clean all \
+  && rpm --root /runtime-root --erase --nodeps --noscripts \
+      alternatives \
+      bash \
+      coreutils \
+      coreutils-common \
+      findutils \
+      gnulib-l10n \
+      grep \
+      groff-base \
+      ncurses \
+      sed \
+  && rm -rf \
+      /runtime-root/run/* \
+      /runtime-root/tmp/* \
+      /runtime-root/var/cache/* \
+      /runtime-root/var/log/*
 
-# WebSocket listener inside the container network namespace. Host exposure is
-# controlled separately (PublishPort in the Quadlet unit).
-EXPOSE 7447
+# Copy the isolated CPAN and Overnet installation, then remove the CMake
+# toolchain payload and bundled libsecp256k1 source used only while building XS.
+# The fully provisioned test installation remains confined to the builder.
+RUN install -d -m 0755 \
+      /runtime-root/opt/overnet/perl5 \
+      /runtime-root/opt/overnet/bin \
+      /runtime-root/var/lib/overnet/authority-relay \
+      /runtime-root/var/lib/overnet/relay \
+  && cp -a /runtime-local/. /runtime-root/opt/overnet/perl5/ \
+  && rm -rf \
+      /runtime-root/opt/overnet/perl5/lib/perl5/*/.meta/Alien-cmake3-* \
+      /runtime-root/opt/overnet/perl5/lib/perl5/*/Alien/cmake3.pm \
+      /runtime-root/opt/overnet/perl5/lib/perl5/*/Alien/libsecp256k1 \
+      /runtime-root/opt/overnet/perl5/lib/perl5/*/auto/Alien/cmake3 \
+      /runtime-root/opt/overnet/perl5/lib/perl5/*/auto/share/dist/Alien-cmake3 \
+  && install -m 0555 \
+      /build/relay-perl/deploy/podman/entrypoint.pl \
+      /runtime-root/opt/overnet/bin/entrypoint.pl \
+  && install -m 0555 \
+      /build/relay-perl/bin/overnet-relay.pl \
+      /runtime-root/opt/overnet/bin/overnet-relay.pl \
+  && install -m 0555 \
+      /build/relay-perl/bin/overnet-authority-relay.pl \
+      /runtime-root/opt/overnet/bin/overnet-authority-relay.pl \
+  && printf '%s\n' 'overnet:x:10001:10001:Overnet relay:/nonexistent:/sbin/nologin' \
+      >> /runtime-root/etc/passwd \
+  && printf '%s\n' 'overnet:x:10001:' >> /runtime-root/etc/group \
+  && chown -R 10001:10001 /runtime-root/var/lib/overnet \
+  && PERL5LIB=/opt/overnet/perl5/lib/perl5 \
+      chroot /runtime-root /usr/bin/perl \
+      -MOvernet::Relay \
+      -MOvernet::Authority::HostedChannel::Relay \
+      -e 1 \
+  && PERL5LIB=/opt/overnet/perl5/lib/perl5 \
+      chroot /runtime-root /usr/bin/perl \
+      /opt/overnet/bin/entrypoint.pl relay --help >/dev/null \
+  && PERL5LIB=/opt/overnet/perl5/lib/perl5 \
+      chroot /runtime-root /usr/bin/perl \
+      /opt/overnet/bin/entrypoint.pl authority --help >/dev/null \
+  && test ! -e /runtime-root/usr/bin/dnf \
+  && test ! -e /runtime-root/usr/bin/dnf5 \
+  && test ! -e /runtime-root/usr/bin/microdnf \
+  && test ! -e /runtime-root/usr/bin/gcc \
+  && test ! -e /runtime-root/usr/bin/make \
+  && test ! -e /runtime-root/usr/bin/cpanm \
+  && test ! -e /runtime-root/usr/bin/sh \
+  && test ! -e /runtime-root/usr/bin/bash
 
-# The image runs the generic Overnet relay service wrapper. Runtime arguments
-# are supplied by the Quadlet unit's Exec= line (or `podman run` arguments);
-# the defaults below make a bare `podman run overnet-relay` usable.
-ENTRYPOINT ["perl", "/opt/overnet/relay-perl/bin/overnet-relay-service.pl"]
-CMD ["--host", "0.0.0.0", \
+FROM scratch
+
+ARG BUILD_DATE=unknown
+ARG VERSION=dev
+ARG VCS_REF=unknown
+
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.description="Minimal Overnet generic and authority relay" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/overnet-project/overnet-perl" \
+      org.opencontainers.image.title="Overnet Relay" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY --from=runtime-assembler /runtime-root/ /
+
+ENV HOME=/nonexistent \
+    PATH=/opt/overnet/bin:/usr/bin \
+    PERL5LIB=/opt/overnet/perl5/lib/perl5
+
+USER 10001:10001
+WORKDIR /
+
+EXPOSE 7447 7448
+
+ENTRYPOINT ["/usr/bin/perl", "/opt/overnet/bin/entrypoint.pl"]
+CMD ["relay", \
+     "--host", "0.0.0.0", \
      "--port", "7447", \
      "--store-file", "/var/lib/overnet/relay/store.json", \
      "--health-file", "/var/lib/overnet/relay/health.json"]
