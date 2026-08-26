@@ -40,6 +40,14 @@ the recorded digest:
 Image=quay.io/overnet/relay@sha256:<published-digest>
 ```
 
+Hosted Quay.io does not currently provide registry-enforced immutable tags.
+The publication workflow therefore treats `sha-<full-git-commit>` tags as
+write-once: it refuses to replace one that appears during a build. On a rerun,
+it pulls the existing image by digest, verifies its source labels, repeats both
+smoke tests, rechecks that the commit tag has not moved, and moves `main` to
+that exact tested artifact without pushing the commit tag again. The digest,
+rather than either tag, remains the immutable deployment identity.
+
 The units set `Pull=missing`, so restarting a service does not silently replace
 an image already present on the host. Pull and inspect an update explicitly
 before restarting the service.

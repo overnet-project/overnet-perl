@@ -22,6 +22,8 @@ my $relay_readme   = File::Spec->catfile($code_root, 'README.md');
 my $entrypoint     = File::Spec->catfile($podman_dir, 'entrypoint.pl');
 my $smoke_test     = File::Spec->catfile($podman_dir, 'smoke-test.sh');
 my $quadlet_check  = File::Spec->catfile($podman_dir, 'quadlet-check.sh');
+my $tag_digest     = File::Spec->catfile($podman_dir, 'registry-tag-digest.sh');
+my $publish_image  = File::Spec->catfile($podman_dir, 'publish-image.sh');
 my $workflow = File::Spec->catfile($code_root, '..', '.github', 'workflows', 'relay-container.yml');
 my $dependabot = File::Spec->catfile($code_root, '..', '.github', 'dependabot.yml');
 my $dockerignore = File::Spec->catfile($code_root, '..', '.dockerignore');
@@ -42,6 +44,8 @@ for my $ignore_file ($dockerignore, $containerignore) {
     "$ignore_file excludes deployment metadata from early COPY layers";
   like $ignore_text, qr{^!relay-perl/deploy/podman/entrypoint\.pl$}mx,
     "$ignore_file retains the runtime role entrypoint";
+  like $ignore_text, qr{^relay-perl/t/registry-publication\.t$}mx,
+    "$ignore_file excludes CI-only registry publication tests";
 }
 
 # The CI verification (build + smoke run + Quadlet check) must be present and
@@ -51,10 +55,16 @@ ok -f $smoke_test && -s $smoke_test,    'smoke-test script exists and is non-emp
 ok -x $smoke_test,                      'smoke-test script is executable';
 ok -f $quadlet_check && -s $quadlet_check, 'quadlet-check script exists and is non-empty';
 ok -x $quadlet_check,                   'quadlet-check script is executable';
+ok -f $tag_digest && -s $tag_digest,    'registry tag lookup script exists and is non-empty';
+ok -x $tag_digest,                      'registry tag lookup script is executable';
+ok -f $publish_image && -s $publish_image,
+  'write-once publication script exists and is non-empty';
+ok -x $publish_image,                   'write-once publication script is executable';
 ok -f $workflow,                        'container-build workflow exists';
 ok -f $dependabot,                       'dependency-update configuration exists';
 
 my $workflow_text = _slurp($workflow);
+my $publish_image_text = _slurp($publish_image);
 like $workflow_text, qr{apt-get\s+install[^\n]*\bpodman\b}mx,
   'workflow installs the complete Podman package for Quadlet validation';
 like $workflow_text, qr{podman\s+build}mx,
@@ -87,18 +97,36 @@ like $workflow_text,
   'workflow sends the Quay token to podman through standard input';
 unlike $workflow_text, qr{podman\s+login[^\n]*--password(?:=|\s)}mx,
   'workflow never places the Quay token in a login argument';
-like $workflow_text, qr{quay\.io/overnet/relay:sha-\$\{GITHUB_SHA\}}mx,
-  'workflow publishes a commit-qualified full-commit tag';
+like $workflow_text, qr{tag="sha-\$\{GITHUB_SHA\}"}mx,
+  'workflow resolves a commit-qualified full-commit tag';
+like $publish_image_text, qr{sha_ref="\$\{repository\}:\$\{tag\}"}mx,
+  'publication helper constructs the resolved commit tag';
+like $workflow_text, qr{id:\s+commit-image}mx,
+  'workflow resolves the commit image before building';
+like $workflow_text, qr{registry-tag-digest\.sh}mx,
+  'workflow checks whether the commit tag already exists';
+like $workflow_text,
+  qr{podman\s+pull\s+"\$repository\@\$existing_digest"}mx,
+  'workflow retrieves an existing commit image by immutable digest';
+like $workflow_text,
+  qr{org\.opencontainers\.image\.revision.*?org\.opencontainers\.image\.version}msx,
+  'workflow verifies the source labels of a reused commit image';
+like $workflow_text,
+  qr{if:\s+steps\.commit-image\.outputs\.exists\s+!=\s+'true'}mx,
+  'workflow builds only when the commit tag is absent';
 like $workflow_text, qr{--build-arg\s+VCS_REF="\$GITHUB_SHA"}mx,
   'published image records the full source revision';
 like $workflow_text, qr{--build-arg\s+VERSION="sha-\$\{GITHUB_SHA\}"}mx,
   'published image records its commit-qualified version';
-like $workflow_text, qr{quay\.io/overnet/relay:main}mx,
-  'workflow updates the documented main tag';
-unlike $workflow_text, qr{quay\.io/overnet/relay:latest}mx,
-  'workflow never publishes an ambiguous latest tag';
-like $workflow_text, qr{podman\s+push\s+--digestfile\b}mx,
-  'workflow records the pushed image digest';
+like $publish_image_text, qr{main_ref="\$\{repository\}:main"}mx,
+  'publication helper updates the documented main tag';
+unlike $workflow_text . $publish_image_text,
+  qr{quay\.io/overnet/relay:latest}mx,
+  'publication path never uses an ambiguous latest tag';
+like $publish_image_text, qr{podman\s+push\s+--digestfile\b}mx,
+  'publication helper records each pushed image digest';
+like $workflow_text, qr{publish-image\.sh}mx,
+  'workflow delegates write-once publication to the tested helper';
 like $workflow_text, qr{GITHUB_STEP_SUMMARY}mx,
   'workflow reports the immutable published image reference';
 like $workflow_text, qr{podman\s+logout\s+quay\.io}mx,
@@ -310,6 +338,10 @@ like $readme_text, qr{does\s+not\s+publish\s+`latest`}mx,
   'README documents that latest is not published';
 like $readme_text, qr{Image=quay\.io/overnet/relay\@sha256:}mx,
   'README documents digest-pinned production deployment';
+like $readme_text, qr{write-once}imx,
+  'README documents the CI-enforced commit-tag policy';
+like $readme_text, qr{Quay\.io.*does\s+not.*immutab}imsx,
+  'README distinguishes CI policy from registry-enforced immutability';
 
 # Setting VolumeName= makes podman use that name verbatim (no systemd- prefix),
 # so the README must inspect the volume by exactly that name and must not refer

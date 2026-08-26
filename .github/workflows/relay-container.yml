@@ -89,7 +89,41 @@ jobs:
       - name: Podman version
         run: podman version
 
+      - name: Resolve the write-once commit image
+        id: commit-image
+        run: |
+          repository="quay.io/overnet/relay"
+          tag="sha-${GITHUB_SHA}"
+          existing_digest="$(
+            relay-perl/deploy/podman/registry-tag-digest.sh \
+              "$repository" "$tag"
+          )"
+
+          if test -n "$existing_digest"; then
+            podman pull "$repository@$existing_digest"
+            podman tag "$repository@$existing_digest" overnet-relay:ci
+
+            revision="$(
+              podman image inspect \
+                --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+                overnet-relay:ci
+            )"
+            version="$(
+              podman image inspect \
+                --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
+                overnet-relay:ci
+            )"
+            test "$revision" = "$GITHUB_SHA"
+            test "$version" = "sha-${GITHUB_SHA}"
+
+            printf 'exists=true\ndigest=%s\n' "$existing_digest" \
+              >> "$GITHUB_OUTPUT"
+          else
+            printf 'exists=false\ndigest=\n' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build the relay image
+        if: steps.commit-image.outputs.exists != 'true'
         run: |
           build_date="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           podman build \
@@ -124,21 +158,15 @@ jobs:
             --password-stdin
 
       - name: Publish the tested image
+        env:
+          EXISTING_DIGEST: ${{ steps.commit-image.outputs.digest }}
         run: |
-          sha_ref="quay.io/overnet/relay:sha-${GITHUB_SHA}"
-          main_ref="quay.io/overnet/relay:main"
-          sha_digest="$RUNNER_TEMP/relay-sha.digest"
-          main_digest="$RUNNER_TEMP/relay-main.digest"
-
-          podman tag overnet-relay:ci "$sha_ref"
-          podman tag overnet-relay:ci "$main_ref"
-          podman push --digestfile "$sha_digest" "$sha_ref"
-          podman push --digestfile "$main_digest" "$main_ref"
-          cmp --silent "$sha_digest" "$main_digest"
-
-          digest="$(cat "$sha_digest")"
-          printf 'Published `%s@%s`\n' "$sha_ref" "$digest" \
-            >> "$GITHUB_STEP_SUMMARY"
+          relay-perl/deploy/podman/publish-image.sh \
+            overnet-relay:ci \
+            quay.io/overnet/relay \
+            "$GITHUB_SHA" \
+            "$EXISTING_DIGEST" \
+            "$GITHUB_STEP_SUMMARY"
 
       - name: Log out of Quay
         if: ${{ always() }}
