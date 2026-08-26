@@ -86,10 +86,12 @@ unlike $containerfile_text, qr{docker\.io}mx,
   'Containerfile never uses Docker Hub';
 unlike $containerfile_text, qr{^FROM\s+\S+:latest(?:\@|\s)}mx,
   'Containerfile never uses a mutable latest base tag';
+unlike $containerfile_text, qr{^FROM\s+quay\.io/fedora/fedora-minimal\b}mx,
+  'Containerfile does not use the Fedora Quay mirror for its base';
 my ($fedora_release) = $containerfile_text =~
-  qr{^FROM\s+quay\.io/fedora/fedora-minimal:(\d+)\@sha256:[0-9a-f]{64}\s+AS\s+builder$}mx;
+  qr{^FROM\s+registry\.fedoraproject\.org/fedora-minimal:(\d+)\@sha256:[0-9a-f]{64}\s+AS\s+builder$}mx;
 ok defined $fedora_release,
-  'Containerfile pins a literal numeric Fedora Minimal release and digest for update tooling';
+  'Containerfile pins Fedora Minimal from Fedora registry by numeric release and digest';
 unlike $containerfile_text, qr{^ARG\s+FEDORA_(?:VERSION|MINIMAL_IMAGE)\b}mx,
   'Containerfile does not duplicate the Fedora release in build arguments';
 like $containerfile_text,
@@ -246,6 +248,8 @@ like $readme_text, qr{\.config/containers/systemd}mx,
   'README documents the rootless Quadlet install path';
 like $readme_text, qr{Fedora\s+Minimal.*pinned|pinned.*Fedora\s+Minimal}imsx,
   'README documents the pinned Fedora Minimal builder policy';
+like $readme_text, qr{registry\.fedoraproject\.org/fedora-minimal}mx,
+  'README identifies Fedora authoritative image registry';
 unlike $readme_text, qr{(?:fedora/fedora-minimal:|\bFedora\s+)\d+}imx,
   'README does not duplicate the Containerfile Fedora release';
 like $readme_text, qr{Dependabot.*weekly}msx,

@@ -48,13 +48,14 @@ podman build \
   .
 ```
 
-The Fedora Minimal builder is pinned to one literal major-release tag and
-digest in the `Containerfile`. It is used only to build and test the Perl
-distributions and assemble the runtime RPM closure. The final image starts from
-`scratch`; it contains the Fedora Perl runtime, required shared libraries and
-certificates, installed CPAN and Overnet modules, and the two service scripts.
-It does not contain the source trees, package manager, compiler, build tools,
-shell, or build-only `Alien::cmake3` payload.
+The Fedora Minimal builder comes from Fedora's authoritative
+`registry.fedoraproject.org/fedora-minimal` registry and is pinned to one
+literal major-release tag and digest in the `Containerfile`. It is used only to
+build and test the Perl distributions and assemble the runtime RPM closure. The
+final image starts from `scratch`; it contains the Fedora Perl runtime, required
+shared libraries and certificates, installed CPAN and Overnet modules, and the
+two service scripts. It does not contain the source trees, package manager,
+compiler, build tools, shell, or build-only `Alien::cmake3` payload.
 
 ## Runtime security
 

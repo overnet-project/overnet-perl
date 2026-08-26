@@ -10,7 +10,7 @@
 #     --tag localhost/overnet-relay:latest \
 #     .
 
-FROM quay.io/fedora/fedora-minimal:44@sha256:4190fe8f01fceecea7bb6c004210da2164cb292057283cfbfeff0d708f389fc5 AS builder
+FROM registry.fedoraproject.org/fedora-minimal:44@sha256:4190fe8f01fceecea7bb6c004210da2164cb292057283cfbfeff0d708f389fc5 AS builder
 
 # Build-only packages never cross into the final image. Weak dependencies are
 # disabled so the toolchain is explicit and reviewable.
