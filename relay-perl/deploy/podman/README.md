@@ -23,6 +23,27 @@ One image serves **two relay roles**, selected by which Quadlet unit you install
 | `overnet-relay.container` / `overnet-relay.volume` | Quadlet units for the generic relay. |
 | `overnet-authority-relay.container` / `overnet-authority-relay.volume` | Quadlet units for the authority relay (same image, different role). |
 
+## Published image
+
+The tested image is published at `quay.io/overnet/relay`. Every successful
+push to the `main` source branch publishes two tags:
+
+- `main` is the convenient moving tag used by the supplied Quadlet units.
+- `sha-<full-git-commit>` identifies the source commit for that build.
+
+The workflow does not publish `latest`. It records the registry digest in the
+GitHub Actions job summary after both tags resolve to the same manifest. For a
+reproducible production deployment, replace the unit's image reference with
+the recorded digest:
+
+```ini
+Image=quay.io/overnet/relay@sha256:<published-digest>
+```
+
+The units set `Pull=missing`, so restarting a service does not silently replace
+an image already present on the host. Pull and inspect an update explicitly
+before restarting the service.
+
 ## Why podman + Quadlet
 
 The relay is a long-lived network service that must survive restarts and keep
@@ -34,12 +55,13 @@ and no root. Everything below runs as an ordinary user.
 
 - `podman` 4.9+ with the `systemd --user` session usable.
   For a login-independent service, enable lingering: `loginctl enable-linger`.
-- The `overnet-perl` monorepo checkout. The repository root, containing both
-  `core-perl/` and `relay-perl/`, is the container build context.
+- The `overnet-perl` monorepo checkout for installing the supplied unit files
+  or building an image locally.
 
 ## Build the image
 
-Run from the `overnet-perl` repository root:
+Local development builds are optional. Run from the `overnet-perl` repository
+root:
 
 ```bash
 podman build \
@@ -47,6 +69,9 @@ podman build \
   --tag localhost/overnet-relay:latest \
   .
 ```
+
+The supplied units use the published image. To exercise a local build through
+Quadlet, change their `Image=` value to `localhost/overnet-relay:latest`.
 
 The Fedora Minimal builder comes from Fedora's authoritative
 `registry.fedoraproject.org/fedora-minimal` registry and is pinned to one
@@ -136,7 +161,7 @@ Commonly adjusted arguments:
 | `--service-policy NAME=VALUE` | Per-operation access policy (`publish`, `query`, `subscribe`, `sync`, `object_read`). |
 | `--store-file` | Store path; must stay inside the mounted volume. |
 
-Run `podman run --rm localhost/overnet-relay:latest relay --help` for the full
+Run `podman run --rm quay.io/overnet/relay:main relay --help` for the full
 argument list. Replace `relay` with `authority` for the authority relay.
 
 ## Persistence
@@ -189,15 +214,13 @@ Point an IRC server at it with `--authority-relay-url ws://<host>:7448` (see
 
 ## Updating
 
-Rebuild the image and restart:
+Pull the reviewed image and restart:
 
 ```bash
-podman build \
-  --file relay-perl/deploy/podman/Containerfile \
-  --tag localhost/overnet-relay:latest \
-  .
+podman pull quay.io/overnet/relay:main
 systemctl --user restart overnet-relay
 ```
 
-The store volume is independent of the image, so data is retained across
-rebuilds.
+For a pinned production deployment, update `Image=` to the new digest and run
+`systemctl --user daemon-reload` before restarting. The store volume is
+independent of the image, so data is retained across updates.

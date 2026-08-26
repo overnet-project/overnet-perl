@@ -69,6 +69,40 @@ like $workflow_text, qr{^\s+schedule:\s*$}mx,
   'workflow rebuilds the image on a schedule';
 like $workflow_text, qr{^\s+-\s+cron:\s*['"][^'"]+['"]\s*$}mx,
   'workflow has a scheduled rebuild cadence';
+like $workflow_text,
+  qr{publish:\s+.*?if:\s*>-\s+.*?github\.event_name\s*==\s*'push'.*?github\.ref\s*==\s*'refs/heads/main'}msx,
+  'workflow publishes only for pushes to main';
+like $workflow_text, qr{^\s+environment:\s+quay-publish\s*$}mx,
+  'publishing job uses the protected Quay environment';
+like $workflow_text, qr{^\s+group:\s+relay-container-publish\s*$}mx,
+  'publishing job has a dedicated concurrency group';
+like $workflow_text, qr{^\s+cancel-in-progress:\s+true\s*$}mx,
+  'newer main builds cancel stale publication jobs';
+like $workflow_text, qr{\$\{\{\s*vars\.QUAY_USERNAME\s*\}\}}mx,
+  'workflow reads the robot username from an environment variable';
+like $workflow_text, qr{\$\{\{\s*secrets\.QUAY_TOKEN\s*\}\}}mx,
+  'workflow reads the robot token from an environment secret';
+like $workflow_text,
+  qr{podman\s+login\s+quay\.io.*?--username.*?--password-stdin}msx,
+  'workflow sends the Quay token to podman through standard input';
+unlike $workflow_text, qr{podman\s+login[^\n]*--password(?:=|\s)}mx,
+  'workflow never places the Quay token in a login argument';
+like $workflow_text, qr{quay\.io/overnet/relay:sha-\$\{GITHUB_SHA\}}mx,
+  'workflow publishes a commit-qualified full-commit tag';
+like $workflow_text, qr{--build-arg\s+VCS_REF="\$GITHUB_SHA"}mx,
+  'published image records the full source revision';
+like $workflow_text, qr{--build-arg\s+VERSION="sha-\$\{GITHUB_SHA\}"}mx,
+  'published image records its commit-qualified version';
+like $workflow_text, qr{quay\.io/overnet/relay:main}mx,
+  'workflow updates the documented main tag';
+unlike $workflow_text, qr{quay\.io/overnet/relay:latest}mx,
+  'workflow never publishes an ambiguous latest tag';
+like $workflow_text, qr{podman\s+push\s+--digestfile\b}mx,
+  'workflow records the pushed image digest';
+like $workflow_text, qr{GITHUB_STEP_SUMMARY}mx,
+  'workflow reports the immutable published image reference';
+like $workflow_text, qr{podman\s+logout\s+quay\.io}mx,
+  'workflow removes registry credentials after publishing';
 
 if (-f $dependabot) {
   my $dependabot_text = _slurp($dependabot);
@@ -198,6 +232,10 @@ like $container_unit_text, qr{^\[Container\]}mx,
   'Quadlet unit declares a [Container] section';
 like $container_unit_text, qr{^Image=}mx,
   'Quadlet unit sets an image';
+like $container_unit_text, qr{^Image=quay\.io/overnet/relay:main$}mx,
+  'generic relay Quadlet uses the official published image';
+like $container_unit_text, qr{^Pull=missing$}mx,
+  'generic relay Quadlet does not replace an existing image implicitly';
 like $container_unit_text, qr{^Volume=overnet-relay\.volume:}mx,
   'Quadlet unit mounts the store volume by the .volume unit file name';
 like $container_unit_text, qr{^PublishPort=127\.0\.0\.1:7447:7447}mx,
@@ -264,6 +302,14 @@ like $readme_text, qr{compiler,\s+build\s+tools,\s+shell,}mx,
   'README documents the shell-free runtime';
 like $readme_text, qr{health\s+checks\s+use\s+JSON\s+exec\s+form}mx,
   'README documents direct health-check execution';
+like $readme_text, qr{quay\.io/overnet/relay}mx,
+  'README documents the official published image';
+like $readme_text, qr{sha-<full-git-commit>}mx,
+  'README documents commit-qualified image tags';
+like $readme_text, qr{does\s+not\s+publish\s+`latest`}mx,
+  'README documents that latest is not published';
+like $readme_text, qr{Image=quay\.io/overnet/relay\@sha256:}mx,
+  'README documents digest-pinned production deployment';
 
 # Setting VolumeName= makes podman use that name verbatim (no systemd- prefix),
 # so the README must inspect the volume by exactly that name and must not refer
@@ -286,8 +332,10 @@ ok -f $authority_vol,  'authority relay Quadlet .volume unit exists';
 ok -f $authority_bin,  'authority relay entrypoint exists';
 
 my $authority_unit_text = _slurp($authority_unit);
-like $authority_unit_text, qr{^Image=localhost/overnet-relay:}mx,
+like $authority_unit_text, qr{^Image=quay\.io/overnet/relay:main$}mx,
   'authority relay reuses the generic relay image';
+like $authority_unit_text, qr{^Pull=missing$}mx,
+  'authority relay does not replace an existing image implicitly';
 unlike $authority_unit_text, qr{^PodmanArgs=}mx,
   'authority relay does not override the hardened image entrypoint';
 like $authority_unit_text, qr{^Exec=authority\b}mx,

@@ -18,7 +18,8 @@ Wants=network-online.target
 
 [Container]
 ContainerName=overnet-relay
-Image=localhost/overnet-relay:latest
+Image=quay.io/overnet/relay:main
+Pull=missing
 
 # The service has no reason to modify the image or acquire Linux capabilities.
 # Podman supplies writable tmpfs mounts for normal runtime scratch paths.

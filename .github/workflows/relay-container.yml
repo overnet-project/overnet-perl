@@ -23,6 +23,9 @@ permissions:
 
 jobs:
   build-and-smoke:
+    if: >-
+      github.event_name != 'push' ||
+      github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     name: Build and smoke-test the relay image
@@ -59,3 +62,84 @@ jobs:
 
       - name: Validate the Quadlet units
         run: relay-perl/deploy/podman/quadlet-check.sh
+
+  publish:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    environment: quay-publish
+    concurrency:
+      group: relay-container-publish
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: Test and publish the relay image
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure the Podman Quadlet generator is installed
+        run: |
+          if ! test -x /usr/libexec/podman/quadlet \
+            && ! test -x /usr/lib/systemd/system-generators/podman-system-generator \
+            && ! test -x /usr/lib/systemd/user-generators/podman-user-generator; then
+            sudo apt-get update
+            sudo apt-get install --yes --reinstall podman
+          fi
+
+      - name: Podman version
+        run: podman version
+
+      - name: Build the relay image
+        run: |
+          build_date="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
+          podman build \
+            --build-arg BUILD_DATE="$build_date" \
+            --build-arg VERSION="sha-${GITHUB_SHA}" \
+            --build-arg VCS_REF="$GITHUB_SHA" \
+            --file relay-perl/deploy/podman/Containerfile \
+            --tag overnet-relay:ci \
+            "$GITHUB_WORKSPACE"
+
+      - name: Smoke-test the generic relay
+        run: relay-perl/deploy/podman/smoke-test.sh overnet-relay:ci
+
+      - name: Smoke-test the authority relay
+        run: |
+          relay-perl/deploy/podman/smoke-test.sh \
+            overnet-relay:ci \
+            relay-perl/deploy/podman/overnet-authority-relay.container
+
+      - name: Validate the Quadlet units
+        run: relay-perl/deploy/podman/quadlet-check.sh
+
+      - name: Log in to Quay
+        env:
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+          QUAY_USERNAME: ${{ vars.QUAY_USERNAME }}
+        run: |
+          test -n "$QUAY_USERNAME"
+          test -n "$QUAY_TOKEN"
+          printf '%s' "$QUAY_TOKEN" | podman login quay.io \
+            --username "$QUAY_USERNAME" \
+            --password-stdin
+
+      - name: Publish the tested image
+        run: |
+          sha_ref="quay.io/overnet/relay:sha-${GITHUB_SHA}"
+          main_ref="quay.io/overnet/relay:main"
+          sha_digest="$RUNNER_TEMP/relay-sha.digest"
+          main_digest="$RUNNER_TEMP/relay-main.digest"
+
+          podman tag overnet-relay:ci "$sha_ref"
+          podman tag overnet-relay:ci "$main_ref"
+          podman push --digestfile "$sha_digest" "$sha_ref"
+          podman push --digestfile "$main_digest" "$main_ref"
+          cmp --silent "$sha_digest" "$main_digest"
+
+          digest="$(cat "$sha_digest")"
+          printf 'Published `%s@%s`\n' "$sha_ref" "$digest" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of Quay
+        if: ${{ always() }}
+        run: podman logout quay.io || true
