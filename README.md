@@ -39,3 +39,8 @@ plx bash -c 'cd overnet-burner && prove -r -l t/ xt/author/'
 ```
 
 Consult the relevant component README and tests before changing a component.
+
+External GitHub Actions are pinned to full commit SHAs, with release comments
+kept beside the pins for review. `t/github-actions-pinning.t` enforces that
+policy across every workflow, and Dependabot proposes weekly updates to the
+pinned references.

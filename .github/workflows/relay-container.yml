@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 30
     name: Build and smoke-test the relay image
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Ensure the Podman Quadlet generator is installed
         run: |
@@ -75,7 +75,7 @@ jobs:
     timeout-minutes: 30
     name: Test and publish the relay image
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Ensure the Podman Quadlet generator is installed
         run: |

@@ -35,19 +35,19 @@ jobs:
       PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: overnet-project/spec
           path: spec
 
-      - uses: shogo82148/actions-setup-perl@v1
+      - uses: shogo82148/actions-setup-perl@53e33bb27be492a926eee378e8a5f7ff6618b061 # v1.43.1
         id: setup-perl
         with:
           perl-version: ${{ matrix.perl }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/perl5
           key: perl-${{ steps.setup-perl.outputs.perl-version }}-${{ hashFiles('core-perl/Makefile.PL', '.github/workflows/core-test.yml') }}
@@ -82,23 +82,23 @@ jobs:
       PERL_MM_OPT: INSTALL_BASE=/home/runner/perl5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: overnet-project/irc-server
           path: irc-server
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: overnet-project/spec
           path: spec
 
-      - uses: shogo82148/actions-setup-perl@v1
+      - uses: shogo82148/actions-setup-perl@53e33bb27be492a926eee378e8a5f7ff6618b061 # v1.43.1
         with:
           perl-version: '5.40'
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/perl5
           key: perl-devel-cover-5.40-${{ hashFiles('core-perl/Makefile.PL', '.github/workflows/core-test.yml') }}
