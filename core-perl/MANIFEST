@@ -1,7 +1,6 @@
 .gitignore
 bin/overnet-auth.pl
 bin/overnet-auth-agent.pl
-CLAUDE.md
 lib/Overnet.pm
 lib/Overnet/Auth/Agent.pm
 lib/Overnet/Auth/Backend.pm

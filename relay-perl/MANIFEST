@@ -5,7 +5,6 @@ bin/overnet-relay-service.pl
 bin/overnet-relay-sync.pl
 bin/overnet-relay.pl
 bin/overnet-release-gate.pl
-CLAUDE.md
 deploy/canary/README.md
 deploy/canary/relay-sync-a-to-b/overnet-relay-sync.env.example
 deploy/canary/relay-sync-a-to-b/relay-sync.json.example
@@ -14,7 +13,10 @@ deploy/canary/relay-sync-b-to-a/relay-sync.json.example
 deploy/systemd/overnet-relay-sync@.service
 deploy/systemd/overnet-relay-sync@.timer
 deploy/podman/Containerfile
+deploy/podman/CVE-2026-11625-r1.patch
+deploy/podman/cpan-audit-exclusions.txt
 deploy/podman/entrypoint.pl
+deploy/podman/generate-perl-sbom.pl
 deploy/podman/README.md
 deploy/podman/overnet-authority-relay.container
 deploy/podman/overnet-authority-relay.volume
@@ -24,7 +26,9 @@ deploy/podman/quadlet-check.sh
 deploy/podman/publish-image.sh
 deploy/podman/registry-tag-digest.sh
 deploy/podman/smoke-test.sh
+deploy/podman/syft.yaml
 deploy/podman/validate-sbom.pl
+deploy/podman/verify-bytes-random-secure-fork.pl
 deploy/systemd/overnet-relay.env.example
 deploy/systemd/overnet-relay.service
 lib/Overnet/Authority/HostedChannel/Relay.pm
@@ -54,6 +58,7 @@ t/deploy-restore-drill-live.t
 t/deploy-service-live.t
 t/makemaker-metadata.t
 t/manifest-skip-policy.t
+t/perl-sbom-generation.t
 t/program-irc-authority-coordinator.t
 t/program-irc-authority-guard.t
 t/program-irc-authority-recovery.t

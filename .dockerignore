@@ -2,6 +2,11 @@
 **/.git
 relay-perl/deploy/podman/*
 !relay-perl/deploy/podman/entrypoint.pl
+!relay-perl/deploy/podman/CVE-2026-11625-r1.patch
+!relay-perl/deploy/podman/cpan-audit-exclusions.txt
+!relay-perl/deploy/podman/generate-perl-sbom.pl
+!relay-perl/deploy/podman/verify-bytes-random-secure-fork.pl
 relay-perl/t/deploy-podman-packaging.t
+relay-perl/t/perl-sbom-generation.t
 relay-perl/t/registry-publication.t
 relay-perl/t/sbom-validation.t

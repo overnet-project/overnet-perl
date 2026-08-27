@@ -32,8 +32,25 @@ my $valid = {
       SPDXID           => 'SPDXRef-Package-perl',
       name             => 'perl',
       downloadLocation => 'NOASSERTION',
+      externalRefs     => [
+        {
+          referenceCategory => 'PACKAGE-MANAGER',
+          referenceType     => 'purl',
+          referenceLocator  => 'pkg:cpan/Moo@2.005005',
+        },
+      ],
     },
   ],
+};
+
+subtest 'requires named package URL prefixes when requested' => sub {
+  my $accepted = _validate($valid, '--require-purl-prefix', 'pkg:cpan/Moo@');
+  is $accepted->{exit}, 0, 'present package URL prefix succeeds';
+
+  my $missing = _validate($valid, '--require-purl-prefix', 'pkg:generic/Overnet-Core@');
+  isnt $missing->{exit}, 0, 'missing required package URL fails';
+  like $missing->{stderr}, qr{missing required package URL prefix.*Overnet-Core}m,
+    'missing package URL is identified';
 };
 
 subtest 'accepts a populated Syft SPDX 2.3 document' => sub {
@@ -69,6 +86,7 @@ subtest 'enforces the SPDX document contract' => sub {
     ['packages',     sub { $_[0]->{packages}               = [] }, qr{at least one package}],
     ['package id',   sub { $_[0]->{packages}[0]{SPDXID}    = '../bad' }, qr{package SPDXID}],
     ['package name', sub { $_[0]->{packages}[0]{name}      = '' },       qr{package name}],
+    ['external refs', sub { $_[0]->{packages}[0]{externalRefs} = {} }, qr{externalRefs}],
     [
       'duplicate package id',
       sub { push @{$_[0]->{packages}}, {%{$_[0]->{packages}[0]}} },
@@ -104,17 +122,17 @@ subtest 'rejects unsafe invocation' => sub {
 done_testing;
 
 sub _validate {
-  my ($document) = @_;
+  my ($document, @options) = @_;
   ++$sequence;
   my $path = File::Spec->catfile($temp, "sbom-$sequence.json");
   _write($path, $json->encode($document));
-  return _run($path);
+  return _run(@options, $path);
 }
 
 sub _run {
-  my ($path) = @_;
+  my (@args) = @_;
   my $stderr = gensym;
-  my $pid    = open3(my $in, my $out, $stderr, $^X, $validator, $path);
+  my $pid    = open3(my $in, my $out, $stderr, $^X, $validator, @args);
   close $in;
   my $stdout = do { local $/; <$out>    // '' };
   my $errors = do { local $/; <$stderr> // '' };

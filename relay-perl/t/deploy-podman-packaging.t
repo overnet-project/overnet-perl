@@ -25,6 +25,13 @@ my $quadlet_check  = File::Spec->catfile($podman_dir, 'quadlet-check.sh');
 my $tag_digest     = File::Spec->catfile($podman_dir, 'registry-tag-digest.sh');
 my $publish_image  = File::Spec->catfile($podman_dir, 'publish-image.sh');
 my $validate_sbom  = File::Spec->catfile($podman_dir, 'validate-sbom.pl');
+my $generate_perl_sbom = File::Spec->catfile($podman_dir, 'generate-perl-sbom.pl');
+my $syft_config = File::Spec->catfile($podman_dir, 'syft.yaml');
+my $cpan_audit_exclusions = File::Spec->catfile($podman_dir, 'cpan-audit-exclusions.txt');
+my $bytes_random_patch = File::Spec->catfile($podman_dir, 'CVE-2026-11625-r1.patch');
+my $bytes_random_verify = File::Spec->catfile(
+  $podman_dir, 'verify-bytes-random-secure-fork.pl'
+);
 my $workflow = File::Spec->catfile($code_root, '..', '.github', 'workflows', 'relay-container.yml');
 my $dependabot = File::Spec->catfile($code_root, '..', '.github', 'dependabot.yml');
 my $dockerignore = File::Spec->catfile($code_root, '..', '.dockerignore');
@@ -66,6 +73,15 @@ ok -x $publish_image,                   'write-once publication script is execut
 ok -f $validate_sbom && -s $validate_sbom,
   'SPDX SBOM validator exists and is non-empty';
 ok -x $validate_sbom,                   'SPDX SBOM validator is executable';
+ok -f $generate_perl_sbom && -s $generate_perl_sbom,
+  'Perl distribution SBOM generator exists and is non-empty';
+ok -x $generate_perl_sbom, 'Perl distribution SBOM generator is executable';
+ok -f $syft_config && -s $syft_config, 'Syft configuration exists and is non-empty';
+ok -f $cpan_audit_exclusions && -s $cpan_audit_exclusions,
+  'reviewed cpan-audit exclusions exist';
+ok -f $bytes_random_patch && -s $bytes_random_patch,
+  'upstream Bytes::Random::Secure security patch exists';
+ok -x $bytes_random_verify, 'fork-safety patch verifier is executable';
 ok -f $workflow,                        'container-build workflow exists';
 ok -f $dependabot,                       'dependency-update configuration exists';
 
@@ -148,6 +164,19 @@ like $workflow_text,
   'published SBOM generation scans the immutable registry digest';
 is scalar(() = $workflow_text =~ m{format:\s+spdx-json\s*$}gmx), 2,
   'both workflow paths emit SPDX JSON';
+is scalar(() = $workflow_text =~ m{config:\s+relay-perl/deploy/podman/syft\.yaml\s*$}gmx), 2,
+  'both workflow paths enable the embedded SBOM cataloger';
+for my $required_purl (
+  'pkg:cpan/Moo@',
+  'pkg:cpan/Net-Nostr-Core@',
+  'pkg:cpan/Net-Nostr-Client@',
+  'pkg:cpan/Net-Nostr-Relay@',
+  'pkg:generic/Overnet-Core@',
+  'pkg:generic/Overnet-Relay@',
+) {
+  is scalar(() = $workflow_text =~ m{--require-purl-prefix\s+\Q$required_purl\E}gmx), 3,
+    "every SBOM validation requires $required_purl";
+}
 is scalar(() = $workflow_text =~ m{validate-sbom\.pl\s+[^\n]*\.spdx\.json}gmx), 3,
   'both generators and the attestation job validate SPDX documents';
 is scalar(() = $workflow_text =~ m{upload-artifact:\s+false\s*$}gmx), 2,
@@ -259,6 +288,25 @@ like $containerfile_text,
 like $containerfile_text,
   qr{cpanm\s+--notest\s+--local-lib-contained\s+/runtime-local}mx,
   'tested dependencies are reinstalled into an isolated runtime tree';
+like $containerfile_text,
+  qr{cpanm\s+--notest\s+--local-lib-contained\s+/audit-local\s+CPAN::Audit\s+CPANSA::DB}mx,
+  'builder installs cpan-audit and its current advisory database outside the runtime';
+like $containerfile_text,
+  qr{cpan-audit.*--fresh.*--no-corelist.*--exclude-file.*cpan-audit-exclusions\.txt.*installed\s+/runtime-root/opt/overnet/perl5}msx,
+  'build gates the final CPAN tree with a fresh advisory database';
+unlike $containerfile_text, qr{cpan-audit[^\n]*--exit-zero}mx,
+  'cpan-audit findings cannot be converted to success';
+unlike $containerfile_text,
+  qr{cp\s+-a\s+/audit-local|COPY\s+--from=\S+\s+/audit-local}mx,
+  'cpan-audit tooling is not copied into the runtime image';
+like $containerfile_text,
+  qr{patch\s+.*CVE-2026-11625-r1\.patch}msx,
+  'build applies the upstream Bytes::Random::Secure fork-safety patch';
+like $containerfile_text, qr{verify-bytes-random-secure-fork\.pl}mx,
+  'build functionally verifies the fork-safety patch';
+like $containerfile_text,
+  qr{generate-perl-sbom\.pl.*--root\s+/runtime-root/opt/overnet/perl5.*--local-metadata\s+/build/core-perl/MYMETA\.json=Overnet.*--local-metadata\s+/build/relay-perl/MYMETA\.json=Overnet::Relay}msx,
+  'build inventories CPAN and both local Overnet distributions';
 like $containerfile_text, qr{\bgit-core\b}mx,
   'builder includes git for dependency conformance tests';
 like $containerfile_text, qr{Crypt-PK-ECC-Schnorr}mx,
@@ -428,6 +476,22 @@ like $readme_text, qr{Quay\.io.*does\s+not.*immutab}imsx,
   'README distinguishes CI policy from registry-enforced immutability';
 like $readme_text, qr{SPDX\s+2\.3}mx,
   'README documents the published SBOM format';
+like $readme_text, qr{CPAN.*Overnet.*distributions}imsx,
+  'README documents complete Perl distribution coverage';
+like $readme_text, qr{cpan-audit}mx,
+  'README documents the CPAN vulnerability gate';
+
+my $cpan_audit_exclusions_text = _slurp($cpan_audit_exclusions);
+my @cpan_audit_exclusions = grep { length }
+  map { s/\s*\#.*\z//mxs; s/\A\s+|\s+\z//gmxs; $_ }
+  split /\n/, $cpan_audit_exclusions_text;
+is \@cpan_audit_exclusions,
+  [qw(CVE-2026-11625 CVE-2026-8647 CVE-2024-58134 CVE-2024-58135)],
+  'cpan-audit exclusions are limited to reviewed individual CVEs';
+unlike $cpan_audit_exclusions_text, qr{CPANSA-}mx,
+  'cpan-audit exclusions do not suppress whole advisories';
+like _slurp($bytes_random_patch), qr{20828ef859e215565ba17a9a24af3a42b0c4360a}mx,
+  'vendored security patch identifies the reviewed upstream commit';
 like $readme_text, qr{gh\s+attestation\s+verify}mx,
   'README documents SBOM signature verification';
 like $readme_text, qr{--predicate-type\s+https://spdx\.dev/Document/v2\.3}mx,

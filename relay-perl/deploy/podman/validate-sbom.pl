@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 
+use Getopt::Long qw(GetOptionsFromArray);
 use JSON::PP ();
 
 sub _fail {
@@ -16,8 +17,16 @@ sub _nonempty_string {
   return defined($value) && !ref($value) && $value =~ /\S/;
 }
 
-@ARGV == 1 or do {
-  print STDERR "usage: $0 SBOM.spdx.json\n";
+my @required_purl_prefixes;
+GetOptionsFromArray(
+  \@ARGV,
+  'require-purl-prefix=s@' => \@required_purl_prefixes,
+) or do {
+  print STDERR "usage: $0 [--require-purl-prefix PREFIX ...] SBOM.spdx.json\n";
+  exit 64;
+};
+@ARGV == 1 && !grep { !_nonempty_string($_) } @required_purl_prefixes or do {
+  print STDERR "usage: $0 [--require-purl-prefix PREFIX ...] SBOM.spdx.json\n";
   exit 64;
 };
 
@@ -59,6 +68,7 @@ ref($packages) eq 'ARRAY' && @{$packages}
   or _fail('document must contain at least one package');
 
 my %package_ids;
+my @package_urls;
 for my $package (@{$packages}) {
   ref($package) eq 'HASH' or _fail('each package must be an object');
   my $id = $package->{SPDXID};
@@ -67,6 +77,20 @@ for my $package (@{$packages}) {
   !$package_ids{$id}++ or _fail("duplicate package SPDXID: $id");
   _nonempty_string($package->{name})
     or _fail("package name must be a non-empty string: $id");
+  my $external_refs = $package->{externalRefs} // [];
+  ref($external_refs) eq 'ARRAY'
+    or _fail("package externalRefs must be an array: $id");
+  for my $reference (@{$external_refs}) {
+    next if ref($reference) ne 'HASH';
+    next if ($reference->{referenceType} // '') ne 'purl';
+    push @package_urls, $reference->{referenceLocator}
+      if _nonempty_string($reference->{referenceLocator});
+  }
+}
+
+for my $prefix (@required_purl_prefixes) {
+  grep { index($_, $prefix) == 0 } @package_urls
+    or _fail("missing required package URL prefix: $prefix");
 }
 
 my $count = scalar @{$packages};

@@ -1,0 +1,16 @@
+# Bytes::Random::Secure 0.29 is patched in this image with the upstream fix
+# merged as daoswald/Bytes-Random-Secure commit 20828ef. cpan-audit identifies
+# releases rather than patched source trees, so it cannot observe that fix.
+CVE-2026-11625
+
+# Crypt::ScryptKDF 0.011 contains the upstream fix. The advisory describes
+# 0.010 and earlier but encodes the fixed version as 0.11, which Perl version
+# semantics treat as newer than 0.011.
+CVE-2026-8647
+
+# Mojolicious is present only because JSON::Schema::Modern uses its JSON and
+# URL utilities. The relay does not create a Mojolicious application, use its
+# cookie sessions, or run its application generator, so neither session-secret
+# code path described by these advisories is reachable.
+CVE-2024-58134
+CVE-2024-58135

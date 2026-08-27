@@ -55,11 +55,18 @@ before restarting the service.
 ### Software bill of materials
 
 Every published image has an SPDX 2.3 JSON software bill of materials generated
-from its immutable registry digest by Syft. The publishing workflow validates
-the document, signs it with GitHub's workload identity, stores it as a GitHub
-artifact for 14 days, and attaches the signed SBOM attestation to the image in
-Quay. Pull-request and scheduled builds generate and validate an SBOM from the
-exact OCI archive they smoke-tested, but cannot sign or publish one.
+from its immutable registry digest by Syft. The image embeds an inventory built
+from every installed CPAN distribution's cpanm metadata and `.packlist`, plus
+the locally built Overnet Core and Overnet Relay distributions. Syft merges
+that inventory with its RPM and filesystem findings. CI rejects an SBOM unless
+representative CPAN, Net::Nostr, and Overnet package URLs are present, so a
+successful but incomplete native Perl scan cannot pass unnoticed.
+
+The publishing workflow validates the complete document, signs it with
+GitHub's workload identity, stores it as a GitHub artifact for 14 days, and
+attaches the signed SBOM attestation to the image in Quay. Pull-request and
+scheduled builds generate and validate an SBOM from the exact OCI archive they
+smoke-tested, but cannot sign or publish one.
 
 Verify that an image's registry-hosted SBOM was signed by the protected `main`
 workflow in this repository:
@@ -140,6 +147,15 @@ release is derived from that image's RPM metadata. Dependabot checks the
 `Containerfile` weekly and proposes reviewed release or digest updates. The
 container workflow also performs a complete scheduled rebuild every week so
 the current Fedora package set continues to pass both relay smoke tests.
+
+Each build also installs the latest `CPAN::Audit` and `CPANSA::DB` into a
+build-only tree and runs `cpan-audit --fresh` against the pruned CPAN tree that
+will enter the final image. New CPAN advisories fail the build. Fedora-provided
+Perl and core modules are excluded from this pass because Quay and Fedora scan
+their RPM provenance. The small CVE-specific exception list is reviewed in
+`cpan-audit-exclusions.txt`; it documents patched source and code paths that
+are not reachable in this service. The audit program and database are not
+copied into the runtime image.
 
 Production builds never use `latest` for their base. Fedora major-version
 updates land through reviewed pull requests and must pass the same image,

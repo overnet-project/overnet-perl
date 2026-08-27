@@ -72,6 +72,15 @@ RUN cpanm GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
   && PERL5LIB=/runtime-local/lib/perl5 \
       perl Makefile.PL INSTALL_BASE=/runtime-local \
   && make pure_install \
+  && patch \
+      --directory=/runtime-local/lib/perl5 \
+      --strip=2 \
+      --forward \
+      --batch \
+      < /build/relay-perl/deploy/podman/CVE-2026-11625-r1.patch \
+  && PERL5LIB=/runtime-local/lib/perl5 \
+      perl /build/relay-perl/deploy/podman/verify-bytes-random-secure-fork.pl \
+  && cpanm --notest --local-lib-contained /audit-local CPAN::Audit CPANSA::DB \
   && rm -rf \
       /runtime-local/bin \
       /runtime-local/man \
@@ -148,6 +157,19 @@ RUN install -d -m 0755 \
       /runtime-root/opt/overnet/perl5/lib/perl5/*/Alien/libsecp256k1 \
       /runtime-root/opt/overnet/perl5/lib/perl5/*/auto/Alien/cmake3 \
       /runtime-root/opt/overnet/perl5/lib/perl5/*/auto/share/dist/Alien-cmake3 \
+  && /usr/bin/perl \
+      /build/relay-perl/deploy/podman/generate-perl-sbom.pl \
+      --root /runtime-root/opt/overnet/perl5 \
+      --local-metadata /build/core-perl/MYMETA.json=Overnet \
+      --local-metadata /build/relay-perl/MYMETA.json=Overnet::Relay \
+      --output /runtime-root/usr/share/overnet/sbom/perl-distributions.spdx.json \
+  && PERL5LIB=/audit-local/lib/perl5 \
+      /audit-local/bin/cpan-audit \
+      --fresh \
+      --no-color \
+      --no-corelist \
+      --exclude-file /build/relay-perl/deploy/podman/cpan-audit-exclusions.txt \
+      installed /runtime-root/opt/overnet/perl5 \
   && install -m 0555 \
       /build/relay-perl/deploy/podman/entrypoint.pl \
       /runtime-root/opt/overnet/bin/entrypoint.pl \
