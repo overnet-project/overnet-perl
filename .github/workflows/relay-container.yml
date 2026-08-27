@@ -63,11 +63,39 @@ jobs:
       - name: Validate the Quadlet units
         run: relay-perl/deploy/podman/quadlet-check.sh
 
+      - name: Export the tested image for SBOM generation
+        run: |
+          podman save --format oci-archive \
+            --output "$RUNNER_TEMP/overnet-relay.oci.tar" \
+            overnet-relay:ci
+
+      - name: Generate the SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: oci-archive:${{ runner.temp }}/overnet-relay.oci.tar
+          format: spdx-json
+          output-file: ${{ runner.temp }}/overnet-relay.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Validate the SPDX SBOM
+        run: relay-perl/deploy/podman/validate-sbom.pl "$RUNNER_TEMP/overnet-relay.spdx.json"
+
+      - name: Upload the validated SPDX SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: overnet-relay-${{ github.sha }}-sbom
+          path: ${{ runner.temp }}/overnet-relay.spdx.json
+          if-no-files-found: error
+          retention-days: 14
+
   publish:
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     environment: quay-publish
+    outputs:
+      image-digest: ${{ steps.published-image.outputs.digest }}
     concurrency:
       group: relay-container-publish
       cancel-in-progress: true
@@ -154,12 +182,15 @@ jobs:
           test -n "$QUAY_USERNAME"
           test -n "$QUAY_TOKEN"
           printf '%s' "$QUAY_TOKEN" | podman login quay.io \
+            --authfile "$RUNNER_TEMP/podman-auth.json" \
             --username "$QUAY_USERNAME" \
             --password-stdin
+          chmod 0600 "$RUNNER_TEMP/podman-auth.json"
 
       - name: Publish the tested image
         env:
           EXISTING_DIGEST: ${{ steps.commit-image.outputs.digest }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/podman-auth.json
         run: |
           relay-perl/deploy/podman/publish-image.sh \
             overnet-relay:ci \
@@ -168,6 +199,125 @@ jobs:
             "$EXISTING_DIGEST" \
             "$GITHUB_STEP_SUMMARY"
 
-      - name: Log out of Quay
+      - name: Remove image-publishing credentials
         if: ${{ always() }}
-        run: podman logout quay.io || true
+        run: |
+          podman logout --authfile "$RUNNER_TEMP/podman-auth.json" quay.io || true
+          rm -f "$RUNNER_TEMP/podman-auth.json"
+
+      - name: Resolve the published image digest
+        id: published-image
+        run: |
+          digest="$(
+            relay-perl/deploy/podman/registry-tag-digest.sh \
+              quay.io/overnet/relay \
+              "sha-${GITHUB_SHA}"
+          )"
+          test "$digest" = "${digest#sha256:}" && exit 1
+          test "${#digest}" -eq 71
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
+  sbom:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: publish
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Generate the published relay SBOM
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate the published SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: registry:quay.io/overnet/relay@${{ needs.publish.outputs.image-digest }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/overnet-relay.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Validate the published SPDX SBOM
+        run: relay-perl/deploy/podman/validate-sbom.pl "$RUNNER_TEMP/overnet-relay.spdx.json"
+
+      - name: Upload the validated published SPDX SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: overnet-relay-${{ github.sha }}-sbom
+          path: ${{ runner.temp }}/overnet-relay.spdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+  attest-sbom:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: [publish, sbom]
+    environment: quay-publish
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Attest the published relay SBOM
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download the validated SPDX SBOM
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: overnet-relay-${{ github.sha }}-sbom
+          path: ${{ runner.temp }}/sbom
+
+      - name: Revalidate the downloaded SPDX SBOM
+        run: relay-perl/deploy/podman/validate-sbom.pl "$RUNNER_TEMP/sbom/overnet-relay.spdx.json"
+
+      - name: Log in to Quay for SBOM attestation
+        env:
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+          QUAY_USERNAME: ${{ vars.QUAY_USERNAME }}
+        run: |
+          test -n "$QUAY_USERNAME"
+          test -n "$QUAY_TOKEN"
+          install -d -m 0700 "$HOME/.docker"
+          QUAY_USERNAME="$QUAY_USERNAME" QUAY_TOKEN="$QUAY_TOKEN" \
+            perl -MJSON::PP -MMIME::Base64=encode_base64 -e '
+              my $auth = encode_base64(
+                "$ENV{QUAY_USERNAME}:$ENV{QUAY_TOKEN}", ""
+              );
+              print JSON::PP->new->canonical->encode({
+                auths => {"quay.io" => {auth => $auth}}
+              });
+            ' > "$HOME/.docker/config.json"
+          chmod 0600 "$HOME/.docker/config.json"
+
+      - name: Attest and publish the SPDX SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: quay.io/overnet/relay
+          subject-digest: ${{ needs.publish.outputs.image-digest }}
+          subject-version: sha-${{ github.sha }}
+          sbom-path: ${{ runner.temp }}/sbom/overnet-relay.spdx.json
+          push-to-registry: true
+          create-storage-record: true
+
+      - name: Verify the Quay-hosted SPDX attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify \
+            "oci://quay.io/overnet/relay@${{ needs.publish.outputs.image-digest }}" \
+            --repo overnet-project/overnet-perl \
+            --signer-workflow overnet-project/overnet-perl/.github/workflows/relay-container.yml \
+            --source-ref refs/heads/main \
+            --bundle-from-oci \
+            --predicate-type https://spdx.dev/Document/v2.3
+
+      - name: Remove Quay attestation credentials
+        if: ${{ always() }}
+        run: |
+          rm -f "$HOME/.docker/config.json"

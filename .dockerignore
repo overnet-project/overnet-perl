@@ -4,3 +4,4 @@ relay-perl/deploy/podman/*
 !relay-perl/deploy/podman/entrypoint.pl
 relay-perl/t/deploy-podman-packaging.t
 relay-perl/t/registry-publication.t
+relay-perl/t/sbom-validation.t

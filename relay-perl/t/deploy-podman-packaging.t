@@ -24,6 +24,7 @@ my $smoke_test     = File::Spec->catfile($podman_dir, 'smoke-test.sh');
 my $quadlet_check  = File::Spec->catfile($podman_dir, 'quadlet-check.sh');
 my $tag_digest     = File::Spec->catfile($podman_dir, 'registry-tag-digest.sh');
 my $publish_image  = File::Spec->catfile($podman_dir, 'publish-image.sh');
+my $validate_sbom  = File::Spec->catfile($podman_dir, 'validate-sbom.pl');
 my $workflow = File::Spec->catfile($code_root, '..', '.github', 'workflows', 'relay-container.yml');
 my $dependabot = File::Spec->catfile($code_root, '..', '.github', 'dependabot.yml');
 my $dockerignore = File::Spec->catfile($code_root, '..', '.dockerignore');
@@ -46,6 +47,8 @@ for my $ignore_file ($dockerignore, $containerignore) {
     "$ignore_file retains the runtime role entrypoint";
   like $ignore_text, qr{^relay-perl/t/registry-publication\.t$}mx,
     "$ignore_file excludes CI-only registry publication tests";
+  like $ignore_text, qr{^relay-perl/t/sbom-validation\.t$}mx,
+    "$ignore_file excludes CI-only SBOM validation tests";
 }
 
 # The CI verification (build + smoke run + Quadlet check) must be present and
@@ -60,6 +63,9 @@ ok -x $tag_digest,                      'registry tag lookup script is executabl
 ok -f $publish_image && -s $publish_image,
   'write-once publication script exists and is non-empty';
 ok -x $publish_image,                   'write-once publication script is executable';
+ok -f $validate_sbom && -s $validate_sbom,
+  'SPDX SBOM validator exists and is non-empty';
+ok -x $validate_sbom,                   'SPDX SBOM validator is executable';
 ok -f $workflow,                        'container-build workflow exists';
 ok -f $dependabot,                       'dependency-update configuration exists';
 
@@ -129,8 +135,86 @@ like $workflow_text, qr{publish-image\.sh}mx,
   'workflow delegates write-once publication to the tested helper';
 like $workflow_text, qr{GITHUB_STEP_SUMMARY}mx,
   'workflow reports the immutable published image reference';
-like $workflow_text, qr{podman\s+logout\s+quay\.io}mx,
+like $workflow_text, qr{podman\s+logout\b[^\n]*\bquay\.io}mx,
   'workflow removes registry credentials after publishing';
+is scalar(() = $workflow_text =~ m{uses:\s+anchore/sbom-action\@[0-9a-f]{40}\s+\#\s+v0\.24\.0}gmx),
+  2, 'both workflow paths generate SBOMs with the pinned Syft action';
+like $workflow_text, qr{podman\s+save\s+--format\s+oci-archive}mx,
+  'non-publishing builds scan an OCI archive of the tested local image';
+like $workflow_text, qr{image:\s+oci-archive:}mx,
+  'non-publishing SBOM generation explicitly scans the OCI archive';
+like $workflow_text,
+  qr{image:\s+registry:quay\.io/overnet/relay\@\$\{\{\s*needs\.publish\.outputs\.image-digest\s*\}\}}mx,
+  'published SBOM generation scans the immutable registry digest';
+is scalar(() = $workflow_text =~ m{format:\s+spdx-json\s*$}gmx), 2,
+  'both workflow paths emit SPDX JSON';
+is scalar(() = $workflow_text =~ m{validate-sbom\.pl\s+[^\n]*\.spdx\.json}gmx), 3,
+  'both generators and the attestation job validate SPDX documents';
+is scalar(() = $workflow_text =~ m{upload-artifact:\s+false\s*$}gmx), 2,
+  'the third-party generator cannot upload unvalidated artifacts';
+is scalar(() = $workflow_text =~ m{uses:\s+actions/upload-artifact\@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\s+\#\s+v7\.0\.1}gmx),
+  2, 'both validated SBOMs use the pinned first-party artifact uploader';
+like $workflow_text,
+  qr{uses:\s+actions/download-artifact\@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\s+\#\s+v8\.0\.1}mx,
+  'attestation uses the pinned first-party artifact downloader';
+like $workflow_text,
+  qr{permissions:\s+.*?id-token:\s+write\s+.*?attestations:\s+write\s+.*?artifact-metadata:\s+write}msx,
+  'publishing job grants the permissions required for signed SBOM metadata';
+like $workflow_text,
+  qr{uses:\s+actions/attest\@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6\s+\#\s+v4\.2\.0}mx,
+  'workflow uses the pinned current GitHub attestation action';
+like $workflow_text, qr{subject-name:\s+quay\.io/overnet/relay\s*$}mx,
+  'SBOM attestation subject is the untagged fully-qualified image name';
+like $workflow_text,
+  qr{subject-digest:\s+\$\{\{\s*needs\.publish\.outputs\.image-digest\s*\}\}}mx,
+  'SBOM attestation is bound to the published digest';
+like $workflow_text, qr{subject-version:\s+sha-\$\{\{\s*github\.sha\s*\}\}}mx,
+  'linked artifact metadata records the full source version';
+like $workflow_text, qr{sbom-path:\s+[^\n]*\.spdx\.json\s*$}mx,
+  'SBOM attestation consumes the validated SPDX document';
+like $workflow_text, qr{push-to-registry:\s+true\s*$}mx,
+  'SBOM attestation is published to Quay';
+like $workflow_text, qr{create-storage-record:\s+true\s*$}mx,
+  'workflow publishes linked artifact metadata';
+like $workflow_text,
+  qr{gh\s+attestation\s+verify\s+.*?--bundle-from-oci.*?--predicate-type\s+https://spdx\.dev/Document/v2\.3}msx,
+  'workflow verifies the Quay-hosted SPDX attestation';
+like $workflow_text,
+  qr{--signer-workflow\s+overnet-project/overnet-perl/\.github/workflows/relay-container\.yml}mx,
+  'registry verification constrains the signer workflow';
+like $workflow_text, qr{--source-ref\s+refs/heads/main}mx,
+  'registry verification constrains the source branch';
+like $workflow_text, qr{auths\s*=>\s*\{"quay\.io"\s*=>\s*\{auth\s*=>\s*\$auth\}\}}mx,
+  'attestation credentials use the Docker configuration consumed by the action';
+like $workflow_text,
+  qr{REGISTRY_AUTH_FILE:\s+\$\{\{\s*runner\.temp\s*\}\}/podman-auth\.json}mx,
+  'image publication uses an isolated Podman credential file';
+like $workflow_text,
+  qr{Remove image-publishing credentials.*?rm\s+-f\s+"\$RUNNER_TEMP/podman-auth\.json".*?Generate the published SPDX SBOM}ms,
+  'publishing credentials are removed before the third-party SBOM action runs';
+like $workflow_text, qr{rm\s+-f\s+"\$HOME/\.docker/config\.json"}mx,
+  'workflow removes the shared registry credential file';
+
+my ($sbom_job_text) = $workflow_text =~
+  m{^  sbom:\s*\n(.*?)(?=^  [a-z][a-z0-9-]*:\s*\n)}ms;
+ok defined $sbom_job_text, 'published SBOM generation has a dedicated job';
+if (defined $sbom_job_text) {
+  unlike $sbom_job_text, qr{secrets\.}mx,
+    'third-party SBOM generation receives no repository secrets';
+  unlike $sbom_job_text, qr{id-token:\s+write}mx,
+    'third-party SBOM generation receives no OIDC permission';
+  unlike $sbom_job_text, qr{attestations:\s+write}mx,
+    'third-party SBOM generation cannot create attestations';
+}
+my ($attest_job_text) = $workflow_text =~
+  m{^  attest-sbom:\s*\n(.*)\z}ms;
+ok defined $attest_job_text, 'SBOM attestation has a dedicated job';
+if (defined $attest_job_text) {
+  unlike $attest_job_text, qr{anchore/sbom-action}mx,
+    'privileged attestation job runs no third-party SBOM action';
+  like $attest_job_text, qr{Revalidate the downloaded SPDX SBOM}m,
+    'privileged job revalidates the transferred SBOM';
+}
 
 if (-f $dependabot) {
   my $dependabot_text = _slurp($dependabot);
@@ -342,6 +426,14 @@ like $readme_text, qr{write-once}imx,
   'README documents the CI-enforced commit-tag policy';
 like $readme_text, qr{Quay\.io.*does\s+not.*immutab}imsx,
   'README distinguishes CI policy from registry-enforced immutability';
+like $readme_text, qr{SPDX\s+2\.3}mx,
+  'README documents the published SBOM format';
+like $readme_text, qr{gh\s+attestation\s+verify}mx,
+  'README documents SBOM signature verification';
+like $readme_text, qr{--predicate-type\s+https://spdx\.dev/Document/v2\.3}mx,
+  'README verifies the SPDX predicate explicitly';
+like $readme_text, qr{--bundle-from-oci}mx,
+  'README documents registry-backed attestation verification';
 
 # Setting VolumeName= makes podman use that name verbatim (no systemd- prefix),
 # so the README must inspect the volume by exactly that name and must not refer

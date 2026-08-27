@@ -52,6 +52,43 @@ The units set `Pull=missing`, so restarting a service does not silently replace
 an image already present on the host. Pull and inspect an update explicitly
 before restarting the service.
 
+### Software bill of materials
+
+Every published image has an SPDX 2.3 JSON software bill of materials generated
+from its immutable registry digest by Syft. The publishing workflow validates
+the document, signs it with GitHub's workload identity, stores it as a GitHub
+artifact for 14 days, and attaches the signed SBOM attestation to the image in
+Quay. Pull-request and scheduled builds generate and validate an SBOM from the
+exact OCI archive they smoke-tested, but cannot sign or publish one.
+
+Verify that an image's registry-hosted SBOM was signed by the protected `main`
+workflow in this repository:
+
+```bash
+gh attestation verify \
+  oci://quay.io/overnet/relay@sha256:<published-digest> \
+  --repo overnet-project/overnet-perl \
+  --signer-workflow overnet-project/overnet-perl/.github/workflows/relay-container.yml \
+  --source-ref refs/heads/main \
+  --bundle-from-oci \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
+
+To inspect the verified SPDX document, add `--format json` and extract the
+predicate rather than trusting an unattested file:
+
+```bash
+gh attestation verify \
+  oci://quay.io/overnet/relay@sha256:<published-digest> \
+  --repo overnet-project/overnet-perl \
+  --signer-workflow overnet-project/overnet-perl/.github/workflows/relay-container.yml \
+  --source-ref refs/heads/main \
+  --bundle-from-oci \
+  --predicate-type https://spdx.dev/Document/v2.3 \
+  --format json \
+  --jq '.[0].verificationResult.statement.predicate'
+```
+
 ## Why podman + Quadlet
 
 The relay is a long-lived network service that must survive restarts and keep
