@@ -2,6 +2,7 @@ package Overnet::Core::Validator;
 
 use strictures 2;
 use English qw(-no_match_vars);
+use Encode  qw(encode FB_CROAK LEAVE_SRC);
 use B       ();
 use JSON    ();
 use Net::Nostr::Event;
@@ -204,7 +205,15 @@ sub _validate_event_content {
 sub _decode_content {
   my ($event) = @_;
   my $content;
-  my $ok = eval { $content = $JSON->decode($event->content); 1 };
+  my $ok = eval {
+    my $text = $event->content;
+
+    # Wire JSON decoders return characters. The UTF-8 JSON decoder below
+    # expects octets; preserve the original event for signature verification.
+    my $bytes = utf8::is_utf8($text) ? encode('utf8', $text, FB_CROAK | LEAVE_SRC) : $text;
+    $content = $JSON->decode($bytes);
+    1;
+  };
   if (!$ok || ref $content ne 'HASH') {
     return (undef, "Content must be a JSON object");
   }

@@ -96,7 +96,7 @@ subtest 'auth event creation and verification reject invalid inputs' => sub {
   my $create = sub {
     return Overnet::Authority::Delegation->create_auth_event(key => $key, @_);
   };
-  is $create->(scope => 's')->{reason}, 'challenge is required', 'a challenge is required';
+  is $create->(scope     => 's')->{reason}, 'challenge is required', 'a challenge is required';
   is $create->(challenge => 'c', scope => [])->{reason}, 'scope is required', 'a scalar scope is required';
   is $create->(challenge => 'c', scope => 's', created_at => undef)->{reason},
     'created_at is required', 'an explicit undef created_at is refused';
@@ -112,28 +112,24 @@ subtest 'auth event creation and verification reject invalid inputs' => sub {
       %override,
     );
   };
-  is $verify->(challenge => q{})->{reason}, 'challenge is required',   'verification requires a challenge';
-  is $verify->(scope => undef)->{reason},   'scope is required',       'verification requires a scope';
-  is $verify->(event => 'junk')->{reason},  'event must be an object', 'events must be hashes';
-  is $verify->(event => {kind => 22_242})->{reason},
+  is $verify->(challenge => q{})->{reason},    'challenge is required',   'verification requires a challenge';
+  is $verify->(scope     => undef)->{reason},  'scope is required',       'verification requires a scope';
+  is $verify->(event     => 'junk')->{reason}, 'event must be an object', 'events must be hashes';
+  is $verify->(event     => {kind => 22_242})->{reason},
     'event must be a valid signed Nostr event', 'unsigned events are refused';
 
-  my $wrong_kind = $key->sign_event_hash(
-    event =>
-      {kind => 1, created_at => 1, tags => [['relay', 'irc://net/scope'], ['challenge', 'c' x 64]], content => q{}},
-  );
+  my $wrong_kind = $key->sign_event_hash(event =>
+      {kind => 1, created_at => 1, tags => [['relay', 'irc://net/scope'], ['challenge', 'c' x 64]], content => q{}},);
   is $verify->(event => $wrong_kind)->{reason}, 'auth event requires kind 22242', 'wrong kinds are refused';
 
-  my $wrong_challenge = $key->sign_event_hash(
-    event =>
-      {kind => 22_242, created_at => 1, tags => [['relay', 'irc://net/scope'], ['challenge', 'x']], content => q{}},
-  );
+  my $wrong_challenge = $key->sign_event_hash(event =>
+      {kind => 22_242, created_at => 1, tags => [['relay', 'irc://net/scope'], ['challenge', 'x']], content => q{}},);
   is $verify->(event => $wrong_challenge)->{reason},
     'auth event challenge does not match', 'foreign challenges are refused';
 
-  my $wrong_scope = $key->sign_event_hash(
-    event => {kind => 22_242, created_at => 1, tags => [['challenge', 'c' x 64]], content => q{}},
-  );
+  my $wrong_scope =
+    $key->sign_event_hash(event => {kind => 22_242, created_at => 1, tags => [['challenge', 'c' x 64]], content => q{}},
+    );
   is $verify->(event => $wrong_scope)->{reason},
     'auth event relay scope does not match', 'missing relay scopes are refused';
 };
@@ -154,20 +150,20 @@ subtest 'delegation grants validate every field' => sub {
     return Overnet::Authority::Delegation->create_delegation_grant_event(key => $key, %base, %override);
   };
 
-  is $create->(relay_url => q{})->{reason}, 'relay_url is required', 'relay_url is validated';
-  is $create->(scope => undef)->{reason},   'scope is required',     'scope is validated';
+  is $create->(relay_url       => q{})->{reason},   'relay_url is required', 'relay_url is validated';
+  is $create->(scope           => undef)->{reason}, 'scope is required',     'scope is validated';
   is $create->(delegate_pubkey => 'D' x 64)->{reason}, 'delegate_pubkey is required',
     'delegate pubkeys must be lowercase hex';
   is $create->(session_id => [])->{reason},      'session_id is required',          'session_id is validated';
   is $create->(expires_at => 'later')->{reason}, 'expires_at is required',          'expires_at must be digits';
-  is $create->(kind => 0)->{reason},             'kind must be a positive integer', 'kind is validated';
+  is $create->(kind       => 0)->{reason},       'kind must be a positive integer', 'kind is validated';
   is $create->(created_at => undef)->{reason},   'created_at is required',          'created_at is validated';
-  is $create->(nick => q{})->{reason}, 'nick must be a non-empty string', 'empty nicks are refused';
-  is $create->(nick => {})->{reason},  'nick must be a non-empty string', 'reference nicks are refused';
+  is $create->(nick       => q{})->{reason},     'nick must be a non-empty string', 'empty nicks are refused';
+  is $create->(nick       => {})->{reason},      'nick must be a non-empty string', 'reference nicks are refused';
 
   my $nickless = $create->(kind => 14_143);
-  is $nickless->{kind}, 14_143, 'a custom kind is applied';
-  is scalar(grep { ref($_) eq 'ARRAY' && $_->[0] eq 'nick' } @{$nickless->{tags}}), 0, 'nick tags are optional';
+  is $nickless->{kind},                                                             14_143, 'a custom kind is applied';
+  is scalar(grep { ref($_) eq 'ARRAY' && $_->[0] eq 'nick' } @{$nickless->{tags}}), 0,      'nick tags are optional';
   ok $create->()->{id}, 'the default grant signs';
 
   my $grant  = $create->();
@@ -183,9 +179,8 @@ subtest 'delegation grants validate every field' => sub {
 
   is $verify->(authority_pubkey => 'nope')->{reason}, 'authority_pubkey is required',
     'the authority pubkey is validated first';
-  is $verify->(event => [])->{reason}, 'event must be an object', 'events must be hashes';
-  is $verify->(kind => 14_143)->{reason},
-    'delegation event uses the wrong event kind', 'kind mismatches are refused';
+  is $verify->(event => [])->{reason},     'event must be an object',                    'events must be hashes';
+  is $verify->(kind  => 14_143)->{reason}, 'delegation event uses the wrong event kind', 'kind mismatches are refused';
   is $verify->(authority_pubkey => 'e' x 64)->{reason},
     'delegation event pubkey does not match the authenticated user', 'foreign signers are refused';
   is $verify->(relay_url => 'ws://other:1')->{reason},
@@ -231,6 +226,62 @@ subtest 'delegation grants validate every field' => sub {
     )->{valid},
     'duplicate and malformed tags are tolerated with first-value-wins semantics',
   );
+};
+
+subtest 'delegated action checks are reusable outside hosted IRC channels' => sub {
+  my $user      = Overnet::Core::Nostr->load_key(privkey => '1' x 64);
+  my $delegate  = Overnet::Core::Nostr->load_key(privkey => '2' x 64);
+  my $relay_url = 'wss://authority.example.test';
+  my @tags      = (
+    [relay      => $relay_url],
+    [server     => 'https://lists.example.test/family'],
+    [delegate   => $delegate->pubkey_hex],
+    [session    => 'list-session'],
+    [expires_at => '2000'],
+  );
+  my $grant_for = sub {
+    my (%override) = @_;
+    return Overnet::Core::Nostr->event_from_wire(
+      $user->create_event_hash(kind => 14_142, created_at => 1_000, content => q{}, tags => \@tags, %override),);
+  };
+  my $grant  = $grant_for->();
+  my $action = Overnet::Core::Nostr->event_from_wire(
+    $delegate->create_event_hash(kind => 1, created_at => 2_000, content => 'list action', tags => []),);
+  ok lives { $grant->validate; $action->validate; }, 'caller supplies signature-validated events';
+  my $check = sub {
+    my (%override) = @_;
+    return Overnet::Authority::Delegation->verify_delegated_action_grant(
+      grant        => $grant,
+      event        => $action,
+      actor_pubkey => $user->pubkey_hex,
+      relay_url    => $relay_url,
+      grant_kind   => 14_142,
+      %override,
+    );
+  };
+  is $check->(), {valid => 1, pubkey => $user->pubkey_hex},
+    'the matching grant identifies the acting user at the existing expiry boundary';
+  is $check->(grant        => undef)->{valid},                      0, 'a missing grant is refused';
+  is $check->(grant_kind   => 1)->{valid},                          0, 'the configured grant kind is enforced';
+  is $check->(actor_pubkey => $delegate->pubkey_hex)->{valid},      0, 'a different acting user is refused';
+  is $check->(relay_url    => 'wss://other.example.test')->{valid}, 0, 'a different authority endpoint is refused';
+  my $wrong_signer = Overnet::Core::Nostr->event_from_wire(
+    $user->create_event_hash(kind => 1, created_at => 2_000, content => q{}, tags => []),);
+  is $check->(event => $wrong_signer)->{valid}, 0, 'an action signed by another key is refused';
+  my $late_action = Overnet::Core::Nostr->event_from_wire(
+    $delegate->create_event_hash(kind => 1, created_at => 2_001, content => q{}, tags => []),);
+  is $check->(event => $late_action)->{reason}, 'delegation grant has expired',
+    'actions after grant expiry are refused';
+
+  for my $field (qw(delegate relay server session expires_at)) {
+    my @missing = grep { $_->[0] ne $field } @tags;
+    is $check->(grant => $grant_for->(tags => \@missing))->{valid}, 0, "missing $field is refused";
+    for my $value (q{}, 'incorrect') {
+      next if $value eq 'incorrect' && ($field eq 'server' || $field eq 'session');
+      my @changed = map { $_->[0] eq $field ? [$field, $value] : $_ } @tags;
+      is $check->(grant => $grant_for->(tags => \@changed))->{valid}, 0, "invalid $field is refused";
+    }
+  }
 };
 
 subtest 'load_key accepts PEM text, raw hex, and nsec secrets' => sub {

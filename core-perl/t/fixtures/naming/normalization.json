@@ -1,0 +1,93 @@
+{
+  "description": "Canonical names are unique within a namespace; normalization never comes from an untrusted lookup result.",
+  "input": {
+    "model": "naming-semantic-v1",
+    "context": {},
+    "cases": [
+      {
+        "id": "irc-casefold",
+        "operation": "normalize",
+        "normalization": "irc-rfc1459-v1",
+        "name": "#Dev[Ops]\\^"
+      },
+      {
+        "id": "irc-local-channel",
+        "operation": "normalize",
+        "normalization": "irc-rfc1459-v1",
+        "name": "&local"
+      },
+      {
+        "id": "irc-non-ascii",
+        "operation": "normalize",
+        "normalization": "irc-rfc1459-v1",
+        "name": "#café"
+      },
+      {
+        "id": "irc-too-long",
+        "operation": "normalize",
+        "normalization": "irc-rfc1459-v1",
+        "name": "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "id": "exact-preserves-case",
+        "operation": "normalize",
+        "normalization": "exact-utf8-v1",
+        "name": "Linux"
+      },
+      {
+        "id": "exact-byte-limit",
+        "operation": "normalize",
+        "normalization": "exact-utf8-v1",
+        "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      {
+        "id": "malformed-utf8",
+        "operation": "normalize_bytes",
+        "normalization": "exact-utf8-v1",
+        "utf8_hex": "c328"
+      },
+      {
+        "id": "unknown-normalizer",
+        "operation": "normalize",
+        "normalization": "casefold-from-discovery",
+        "name": "#linux"
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "id": "irc-casefold",
+        "name": "#dev{ops}|~"
+      },
+      {
+        "id": "irc-local-channel",
+        "error": "invalid"
+      },
+      {
+        "id": "irc-non-ascii",
+        "error": "invalid"
+      },
+      {
+        "id": "irc-too-long",
+        "error": "invalid"
+      },
+      {
+        "id": "exact-preserves-case",
+        "name": "Linux"
+      },
+      {
+        "id": "exact-byte-limit",
+        "error": "invalid"
+      },
+      {
+        "id": "malformed-utf8",
+        "error": "invalid"
+      },
+      {
+        "id": "unknown-normalizer",
+        "error": "unsupported"
+      }
+    ]
+  }
+}

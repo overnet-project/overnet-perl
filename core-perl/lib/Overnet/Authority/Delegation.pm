@@ -166,6 +166,46 @@ sub verify_delegation_grant {
   };
 }
 
+sub verify_delegated_action_grant {
+  my ($class, %args) = @_;
+  my $grant = $args{grant};
+  if (!$grant) {
+    return _invalid('delegation grant is required');
+  }
+  if ($grant->kind != $args{grant_kind}) {
+    return _invalid('delegation grant uses the wrong event kind');
+  }
+  if ($grant->pubkey ne $args{actor_pubkey}) {
+    return _invalid('delegation grant is not signed by the effective actor');
+  }
+
+  my %tags = _first_tag_values($grant->tags);
+  if (!(defined $tags{delegate} && !ref($tags{delegate}) && $tags{delegate} eq $args{event}->pubkey)) {
+    return _invalid('delegation grant does not delegate to the event signer');
+  }
+  if (!(defined $tags{relay} && !ref($tags{relay}) && $tags{relay} eq $args{relay_url})) {
+    return _invalid('delegation grant is bound to a different relay');
+  }
+  for my $required_tag (qw(server session)) {
+    if (!(defined $tags{$required_tag} && !ref($tags{$required_tag}) && length($tags{$required_tag}))) {
+      return _invalid('delegation grant is missing required tags');
+    }
+  }
+  my $expires_at = $tags{expires_at};
+  if (
+    !(
+         defined $expires_at
+      && !ref($expires_at)
+      && $expires_at =~ /\A\d+\z/mxs
+      && $args{event}->created_at <= $expires_at
+    )
+  ) {
+    return _invalid('delegation grant has expired');
+  }
+
+  return {valid => 1, pubkey => $args{actor_pubkey},};
+}
+
 sub _validate_grant_creation {
   my (%args) = @_;
   return
@@ -370,6 +410,17 @@ Public API entry point.
 =head2 verify_delegation_grant
 
 Public API entry point.
+
+=head2 verify_delegated_action_grant
+
+Checks the binding between an accepted grant and a delegated action, returning
+C<valid> with the effective C<pubkey>, or C<valid =E<gt> 0> and C<reason>.
+Arguments are C<grant>, C<event>, C<actor_pubkey>, C<relay_url>, and C<grant_kind>.
+
+C<grant> and C<event> must be already signature-validated event objects exposing
+C<kind>, C<pubkey>, C<tags>, and C<created_at>. This method checks authorization
+bindings; it does not revalidate their signatures. The caller retains grant
+lookup, retention, session-lifetime enforcement, and application permissions.
 
 =head1 DIAGNOSTICS
 

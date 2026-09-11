@@ -25,10 +25,63 @@ Current implemented scope:
 - baseline removal authorization
 - baseline delegation semantics for delegated removal
 - hosted-channel authority helpers
+- naming v1 record/history verification and its IRC binding
+- naming lookup nonces, rollback detection, and checkpoint persistence callbacks
 - Overnet program runtime modules
 - local auth-agent config, daemon, and client CLI
 - shared fixture regeneration from `spec`
 - non-relay program/runtime tests
+
+## Naming Verification
+
+`Overnet::Core::Naming` validates naming records against an explicitly pinned
+namespace configuration. It checks real Nostr signatures, embedded requests,
+canonical identities and endpoints, prior-controller authorization, complete
+history, legal recorded transitions, and fresh current-head proofs. Malformed
+JSON, duplicate members, and unknown profiles cannot establish authority.
+
+`Overnet::Core::Naming::Verifier` adds one-use random lookup nonces and retained
+checkpoints and conflict evidence. It requires `load_state` and `save_state`
+callbacks and an explicit clock-error bound. The save callback must durably
+persist the supplied snapshot before returning true; failed persistence returns
+`unavailable` without an authority. Store access must have one serialized owner.
+Missing state requires explicit recovery, not automatic initialization.
+
+```perl
+my $verifier = Overnet::Core::Naming::Verifier->new(
+  namespace  => $pinned_config,
+  epsilon    => 2,
+  load_state => sub { return $store->load; },
+  save_state => sub { return $store->durably_save($_[0]); },
+);
+my $lookup = $verifier->begin_lookup(name => '#Overnet');
+# Send lookup namespace_id, name, and nonce to the configured registrar.
+my $result = $verifier->verify_resolution(
+  nonce   => $lookup->{nonce},
+  proof   => $response->{proof},
+  history => $response->{history},
+);
+```
+
+Only `resolved` includes an active authority. Callers must continue to enforce
+proof expiry and their monitored clock bound each time they use it. A signed
+`not_found` permits an atomic registration attempt; it does not reserve a name.
+POD in both modules documents input/result fields, local plaintext exceptions,
+resource limits, and the explicit initial-store provisioning API.
+
+These are shared verification components. Network lookup, a durable storage
+backend, registrar transactions, runtime service dispatch, and IRC hosting
+integration remain follow-up work. The components do not advertise a naming
+role or cryptographically prove operational fencing and destination recovery.
+
+`t/naming.t` constructs real signed events for the spec's normalization and
+resolution scenarios and exercises unauthorized transitions, expiry, forks,
+replay, storage failures, and checkpoint/conflict retention across restart.
+The test bundles those two scenario files for standalone distribution testing
+and checks them against a sibling spec checkout when available. Keep the copies
+in `t/fixtures/naming/` synchronized with `spec/fixtures/naming/`. Registrar
+atomicity, host provisioning, and application-state transfer fixtures require
+the corresponding future implementations.
 
 ## Auth Agent
 

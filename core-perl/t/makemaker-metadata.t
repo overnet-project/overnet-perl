@@ -32,12 +32,14 @@ is(
   $args->{PREREQ_PM},
   {
     'AnyEvent'             => 0,
+    'Cpanel::JSON::XS'     => '4.43',
     'CryptX'               => 0,
     'IO::Socket::SSL'      => 0,
     'JSON'                 => 0,
     'JSON::Schema::Modern' => 0,
     'Moo'                  => 0,
     'Net::Nostr'           => 0,
+    'URI'                  => 0,
     'strictures'           => 2,
   },
   'runtime prerequisites are limited to top-level non-core distributions',
@@ -71,6 +73,7 @@ is(
         t/auth-config.t
         t/auth-daemon-cli.t
         t/auth-daemon.t
+        t/auth-exchange.t
         t/auth-readme.t
         t/auth-socket-io.t
         t/auth-state-store.t
@@ -81,6 +84,7 @@ is(
         t/core-nostr.t
         t/makemaker-metadata.t
         t/manifest-skip-policy.t
+        t/naming.t
         t/profile-contract-oracle.t
         t/profile-contract.t
         t/program-adapter-registry.t

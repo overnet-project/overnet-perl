@@ -11,6 +11,7 @@ our @EXPORT_OK = qw(build_authoritative_relay);
 
 use Net::Nostr::Group;
 use Net::Nostr::Relay;
+use Overnet::Authority::Delegation;
 use Overnet::Authority::HostedChannel ();
 use Overnet::Relay::Store::File;
 
@@ -336,35 +337,15 @@ sub _verify_delegation_grant {
   if (!$grant) {
     return 'unauthorized: delegation grant is not known to this relay';
   }
-  if ($grant->kind != $context->{grant_kind}) {
-    return 'unauthorized: delegation grant uses the wrong event kind';
-  }
-  if ($grant->pubkey ne $context->{actor_pubkey}) {
-    return 'unauthorized: delegation grant is not signed by the effective actor';
-  }
-
-  my %tags = _first_tag_values($grant->tags);
-  if (!(defined $tags{delegate} && !ref($tags{delegate}) && $tags{delegate} eq $context->{event}->pubkey)) {
-    return 'unauthorized: delegation grant does not delegate to the event signer';
-  }
-  if (!(defined $tags{relay} && !ref($tags{relay}) && $tags{relay} eq $context->{relay_url})) {
-    return 'unauthorized: delegation grant is bound to a different relay';
-  }
-  for my $required_tag (qw(server session)) {
-    if (!(defined $tags{$required_tag} && !ref($tags{$required_tag}) && length($tags{$required_tag}))) {
-      return 'unauthorized: delegation grant is missing required tags';
-    }
-  }
-  my $expires_at = $tags{expires_at};
-  if (
-    !(
-         defined $expires_at
-      && !ref($expires_at)
-      && $expires_at =~ /\A\d+\z/mxs
-      && $context->{event}->created_at <= $expires_at
-    )
-  ) {
-    return 'unauthorized: delegation grant has expired';
+  my $validation = Overnet::Authority::Delegation->verify_delegated_action_grant(
+    grant        => $grant,
+    event        => $context->{event},
+    actor_pubkey => $context->{actor_pubkey},
+    relay_url    => $context->{relay_url},
+    grant_kind   => $context->{grant_kind},
+  );
+  if (!$validation->{valid}) {
+    return 'unauthorized: ' . $validation->{reason};
   }
 
   return;

@@ -1,0 +1,293 @@
+{
+  "description": "Only complete, fresh, trusted evidence selects an authority; stale, conflicting and forged evidence cannot authorize a route.",
+  "input": {
+    "model": "naming-semantic-v1",
+    "context": {
+      "namespace_id": "ns:1111111111111111111111111111111111111111111111111111111111111111",
+      "name": "#overnet",
+      "now": 1100,
+      "nonce": "nonce-current",
+      "history_validation": "valid unless a case states otherwise",
+      "clock_error_bound": 0
+    },
+    "cases": [
+      {
+        "id": "current-assignment",
+        "operation": "resolve",
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": "commit-2",
+          "revision": 2
+        },
+        "history": [
+          {
+            "id": "commit-1",
+            "revision": 1,
+            "previous": null
+          },
+          {
+            "id": "commit-2",
+            "revision": 2,
+            "previous": "commit-1",
+            "status": "active",
+            "authority": "host-a"
+          }
+        ],
+        "retained_head": {
+          "id": "commit-1",
+          "revision": 1
+        }
+      },
+      {
+        "id": "verified-absence",
+        "operation": "resolve",
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": null,
+          "revision": 0
+        },
+        "history": [],
+        "retained_head": null
+      },
+      {
+        "id": "empty-replica",
+        "operation": "resolve",
+        "transport": "generic-relay",
+        "events": [],
+        "proof": null
+      },
+      {
+        "id": "lookup-expired",
+        "operation": "resolve",
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1040,
+          "expires_at": 1100,
+          "head": "commit-1",
+          "revision": 1
+        }
+      },
+      {
+        "id": "wrong-nonce",
+        "operation": "resolve",
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-old",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": "commit-1",
+          "revision": 1
+        }
+      },
+      {
+        "id": "rollback",
+        "operation": "resolve",
+        "retained_head": {
+          "id": "commit-3",
+          "revision": 3
+        },
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": "commit-1",
+          "revision": 1
+        },
+        "history": [
+          {
+            "id": "commit-1",
+            "revision": 1,
+            "previous": null
+          }
+        ]
+      },
+      {
+        "id": "false-absence",
+        "operation": "resolve",
+        "retained_head": {
+          "id": "commit-1",
+          "revision": 1
+        },
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": null,
+          "revision": 0
+        },
+        "history": []
+      },
+      {
+        "id": "registrar-equivocation",
+        "operation": "resolve",
+        "retained_head": {
+          "id": "commit-2a",
+          "revision": 2
+        },
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": "commit-2b",
+          "revision": 2
+        },
+        "history": [
+          {
+            "id": "commit-1",
+            "revision": 1,
+            "previous": null
+          },
+          {
+            "id": "commit-2b",
+            "revision": 2,
+            "previous": "commit-1"
+          }
+        ]
+      },
+      {
+        "id": "forged-high-revision",
+        "operation": "resolve",
+        "retained_head": {
+          "id": "commit-2",
+          "revision": 2
+        },
+        "candidate": {
+          "id": "forged-999",
+          "revision": 999,
+          "signature_valid": false
+        }
+      },
+      {
+        "id": "untrusted-same-label",
+        "operation": "resolve",
+        "selected_namespace": "ns:1111111111111111111111111111111111111111111111111111111111111111",
+        "candidate_namespace": "ns:6666666666666666666666666666666666666666666666666666666666666666",
+        "selected_label": "overnet",
+        "candidate_label": "overnet"
+      },
+      {
+        "id": "incomplete-history",
+        "operation": "resolve",
+        "proof": {
+          "signer": "registrar",
+          "nonce": "nonce-current",
+          "created_at": 1090,
+          "expires_at": 1150,
+          "head": "commit-3",
+          "revision": 3
+        },
+        "history": [
+          {
+            "id": "commit-1",
+            "revision": 1,
+            "previous": null
+          },
+          {
+            "id": "commit-3",
+            "revision": 3,
+            "previous": "commit-2"
+          }
+        ]
+      },
+      {
+        "id": "sticky-conflict-after-restart",
+        "operation": "resolve_after_restart",
+        "retained_conflict": [
+          "commit-2a",
+          "commit-2b"
+        ],
+        "visible_branch": "commit-2a"
+      }
+    ]
+  },
+  "expected": {
+    "cases": [
+      {
+        "id": "current-assignment",
+        "outcome": "resolved",
+        "authority": "host-a",
+        "checkpoint": {
+          "id": "commit-2",
+          "revision": 2
+        }
+      },
+      {
+        "id": "verified-absence",
+        "outcome": "not_found",
+        "may_attempt_registration": true,
+        "may_create_without_commit": false
+      },
+      {
+        "id": "empty-replica",
+        "outcome": "unavailable",
+        "may_attempt_registration": false
+      },
+      {
+        "id": "lookup-expired",
+        "outcome": "unavailable",
+        "active_route": null
+      },
+      {
+        "id": "wrong-nonce",
+        "outcome": "invalid",
+        "active_route": null
+      },
+      {
+        "id": "rollback",
+        "outcome": "conflict",
+        "active_route": null,
+        "checkpoint": {
+          "id": "commit-3",
+          "revision": 3
+        },
+        "retain_conflict": true
+      },
+      {
+        "id": "false-absence",
+        "outcome": "conflict",
+        "may_attempt_registration": false,
+        "retain_conflict": true
+      },
+      {
+        "id": "registrar-equivocation",
+        "outcome": "conflict",
+        "active_route": null,
+        "retain_conflict": true
+      },
+      {
+        "id": "forged-high-revision",
+        "outcome": "invalid",
+        "checkpoint": {
+          "id": "commit-2",
+          "revision": 2
+        },
+        "retain_conflict": false
+      },
+      {
+        "id": "untrusted-same-label",
+        "outcome": "untrusted",
+        "active_route": null
+      },
+      {
+        "id": "incomplete-history",
+        "outcome": "unavailable",
+        "active_route": null
+      },
+      {
+        "id": "sticky-conflict-after-restart",
+        "outcome": "conflict",
+        "active_route": null
+      }
+    ]
+  }
+}

@@ -11,12 +11,15 @@ lib/Overnet/Auth/Client.pm
 lib/Overnet/Auth/CLI.pm
 lib/Overnet/Auth/Config.pm
 lib/Overnet/Auth/Daemon.pm
+lib/Overnet/Auth/Exchange.pm
 lib/Overnet/Auth/Server.pm
 lib/Overnet/Auth/StateStore.pm
 lib/Overnet/Authority/Delegation.pm
 lib/Overnet/Authority/HostedChannel.pm
 lib/Overnet/CommandBus.pm
 lib/Overnet/Core/Nostr.pm
+lib/Overnet/Core/Naming.pm
+lib/Overnet/Core/Naming/Verifier.pm
 lib/Overnet/Core/Nostr/Event.pm
 lib/Overnet/Core/Nostr/Key.pm
 lib/Overnet/Core/ProfileContract.pm
@@ -43,6 +46,9 @@ LICENSE
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
+t/fixtures/naming/normalization.json
+t/fixtures/naming/resolution.json
+t/naming.t
 README.md
 t/00-load-program-runtime.t
 t/auth-agent.t
@@ -53,6 +59,7 @@ t/auth-cli.t
 t/auth-config.t
 t/auth-daemon-cli.t
 t/auth-daemon.t
+t/auth-exchange.t
 t/auth-readme.t
 t/auth-socket-io.t
 t/auth-state-store.t
