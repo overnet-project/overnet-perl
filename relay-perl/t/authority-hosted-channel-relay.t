@@ -976,7 +976,7 @@ subtest 'a grant with an empty required tag is rejected' => sub {
       ['server',     q{}],
       ['delegate',   $operator_session_key->pubkey_hex],
       ['session',    'session-1'],
-      ['expires_at', $BASE_TIME + 3_600],
+      ['expires_at', ($BASE_TIME + 3_600) . q{}],
     ],
   );
   $relay->store->store($grant);

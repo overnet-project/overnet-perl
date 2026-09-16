@@ -2,9 +2,9 @@
 set -eu
 
 # Temporary source pin until Net::Nostr::Core 1.002002 is available on CPAN.
-# That release preserves numeric event fields with JSON::XS (NIP-01).
+# That release preserves numeric event and filter fields with JSON::XS (NIP-01).
 # Arguments are forwarded to cpanm, e.g. --notest --local-lib ~/perl5.
-revision=4d82e7c8c4a61ea90b79e346c09f5ed7dc5e065a
+revision=25d8b9b5ea12bbf3ed084c2bd6eef94b3e6b6a85
 source_dir=$(mktemp -d)
 trap 'rm -rf "$source_dir"' EXIT
 trap 'exit 1' HUP INT TERM
