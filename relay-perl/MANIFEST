@@ -93,3 +93,8 @@ t/relay-sync.t
 t/relay.t
 t/repo-split.t
 t/spec-conformance-irc-server.t
+lib/Overnet/Relay/Store.pm
+lib/Overnet/Relay/Connection.pm
+t/relay-audit.t
+lib/Overnet/Authority/HostedChannel/Transport.pm
+t/authority-admission-audit.t

@@ -4,10 +4,13 @@ use strictures 2;
 use Moo;
 use English qw(-no_match_vars);
 
+use B            ();
 use JSON         ();
+use List::Util   qw(any);
 use Time::HiRes  qw(time);
 use Scalar::Util qw(blessed weaken);
 use Overnet::Authority::Delegation;
+use Overnet::Core::Nostr::Event;
 use Overnet::CommandBus;
 
 our $VERSION = '0.001';
@@ -21,6 +24,7 @@ has state_writer                 => (is => 'ro',   reader   => '_state_writer');
 has next_policy_id               => (is => 'rw',   accessor => '_next_policy_id_value');
 has next_session_id              => (is => 'rw',   accessor => '_next_session_id_value');
 has allow_unattended_autoapprove => (is => 'ro',   reader   => '_allow_unattended_autoapprove');
+has clock                        => (is => 'ro',   reader   => '_clock');
 has bus                          => (is => 'lazy', init_arg => undef);
 
 no Moo;
@@ -36,6 +40,7 @@ sub BUILDARGS {
     service_pins                 => {},
     sessions                     => {},
     state_writer                 => $args{state_writer},
+    clock                        => $args{clock} || sub { int(time()) },
     next_policy_id               => 1,
     next_session_id              => 1,
     allow_unattended_autoapprove => $args{allow_unattended_autoapprove} ? 1 : 0,
@@ -55,29 +60,7 @@ sub BUILDARGS {
     push @{$state->{identity_order}}, $identity_id;
   }
 
-  for my $policy (@{$args{policies} || []}) {
-    if (!(ref($policy) eq 'HASH')) {
-      next;
-    }
-    my $stored = _normalize_policy_input($policy);
-    if (!($stored)) {
-      next;
-    }
-
-    my $policy_id = _policy_id_value($policy->{policy_id});
-    if (!(defined $policy_id)) {
-      $policy_id = _next_policy_id($state);
-    }
-    $stored->{policy_id} = $policy_id;
-    push @{$state->{policies}}, $stored;
-    _note_policy_id($state, $policy_id);
-  }
-
-  $state->{service_pins} = {
-    map  { $_ => {%{$args{service_pins}{$_}}} }
-    grep { ref($args{service_pins}{$_}) eq 'HASH' }
-      keys %{$args{service_pins} || {}}
-  };
+  _load_trust_state($state, \%args);
 
   for my $session (@{$args{sessions} || []}) {
     if (!(ref($session) eq 'HASH')) {
@@ -96,6 +79,49 @@ sub BUILDARGS {
   return $state;
 }
 
+sub _load_trust_state {
+  my ($state, $args) = @_;
+  for my $policy (@{$args->{policies} || []}) {
+    die "invalid stored auth policy\n" if ref($policy) ne 'HASH';
+    my $stored = _normalize_policy_input($policy);
+    die "invalid stored auth policy\n" if !$stored;
+
+    my $policy_id = _policy_id_value($policy->{policy_id});
+    if (!(defined $policy_id)) {
+      $policy_id = _next_policy_id($state);
+    }
+    $stored->{policy_id} = $policy_id;
+    push @{$state->{policies}}, $stored;
+    _note_policy_id($state, $policy_id);
+  }
+
+  for my $locator (keys %{$args->{service_pins} || {}}) {
+    my $pin = _normalize_service_identity($args->{service_pins}{$locator});
+    die "invalid stored service pin\n" if !length($locator) || !$pin;
+    $state->{service_pins}{$locator} = $pin;
+  }
+
+  return;
+}
+
+sub _caller_rejection {
+  my ($method, $params, $caller) = @_;
+  if ($method =~ /\A(?:policies|service_pins)\./mxs && !$caller->{admin}) {
+    return 'trusted administration is required';
+  }
+  if ($method =~ /\Asessions\./mxs && !$caller->{admin} && !_non_empty_string($caller->{program_id})) {
+    return 'caller program identity is unverified';
+  }
+  if (
+    $method eq 'sessions.authorize'
+    && (!_non_empty_string($caller->{program_id})
+      || (_non_empty_string($params->{program_id}) && $params->{program_id} ne $caller->{program_id}))
+  ) {
+    return 'program_id does not match the bound caller';
+  }
+  return;
+}
+
 sub _constructor_args_hash {
   my (@args) = @_;
   return %{$args[0]} if @args == 1 && ref($args[0]) eq 'HASH';
@@ -104,7 +130,7 @@ sub _constructor_args_hash {
 }
 
 sub dispatch {
-  my ($self, $request) = @_;
+  my ($self, $request, %options) = @_;
   my $id =
     (ref($request) eq 'HASH' && defined($request->{id}) && !ref($request->{id}))
     ? $request->{id}
@@ -126,12 +152,30 @@ sub dispatch {
     return $self->_error_response($id, 'protocol.unknown_method', "unsupported method: $method");
   }
 
-  my $params = ref($request->{params}) eq 'HASH' ? $request->{params} : {};
+  if (exists($request->{params}) && ref($request->{params}) ne 'HASH') {
+    return $self->_error_response($id, 'protocol.invalid_params', 'params must be an object');
+  }
+  my $params = $request->{params} || {};
+  if ($method =~ /\Asessions[.](?:authorize|renew)\z/mxs) {
+    my $type_error = _optional_session_parameter_error($params);
+    if ($type_error) {
+      return $self->_error_response($id, 'protocol.invalid_params', $type_error);
+    }
+  }
+
+  # Only the embedding host / transport resolver supplies this context. Never
+  # copy caller identity or administration claims from the request envelope.
+  my $caller       = ref($options{caller}) eq 'HASH' ? $options{caller} : {};
+  my $caller_error = _caller_rejection($method, $params, $caller);
+  if ($caller_error) {
+    return $self->_error_response($id, 'auth.policy_denied', $caller_error);
+  }
+  $request = {%{$request}, params => $params};
 
   my $result;
   my $error;
   eval {
-    $result = $self->bus->dispatch($method, $params, {request => $request});
+    $result = $self->bus->dispatch($method, $params, {request => $request, caller => $caller});
     1;
   } or $error = $EVAL_ERROR;
 
@@ -175,7 +219,7 @@ sub _build_bus {
       $method,
       sub {
         my (undef, undef, $context) = @_;
-        return $agent->$impl($context->{request});
+        return $agent->$impl($context->{request}, $context->{caller});
       }
     );
   }
@@ -347,11 +391,12 @@ sub _dispatch_service_pins_forget {
 }
 
 sub _dispatch_sessions_list {
-  my ($self, $request) = @_;
+  my ($self, $request, $caller) = @_;
 
   return {
     sessions => [
-      map { _session_descriptor($self->{sessions}{$_}) }
+      map  { _session_descriptor($self->{sessions}{$_}) }
+      grep { $caller->{admin} || (($self->{sessions}{$_}{program_id} || q{}) eq $caller->{program_id}) }
       sort keys %{$self->{sessions}}
     ],
   };
@@ -407,8 +452,26 @@ sub _authorize_context {
   if (!($identity)) {
     return (undef, $identity_error);
   }
+
+  # Local renewal authority is short-lived, even for challenge-only sessions.
+  my $now        = $self->_now;
+  my $expires_at = $now + 300;
+  if ($params->{action} eq 'session.delegate') {
+    for my $artifact (@{$params->{artifacts}}) {
+      next if ref($artifact) ne 'HASH' || ref($artifact->{params}) ne 'HASH';
+      my %tags = _first_tag_values($artifact->{params}{tags});
+      next if !defined($tags{expires_at}) || ref($tags{expires_at}) || $tags{expires_at} !~ /\A[0-9]+\z/mxs;
+      if ($tags{expires_at} <= $now) {
+        return (undef, ['protocol.invalid_params', 'delegation expiry must be in the future']);
+      }
+      if ($tags{expires_at} < $expires_at) {
+        $expires_at = 0 + $tags{expires_at};
+      }
+    }
+  }
   return (
     {
+      expires_at => $expires_at,
       identity   => $identity,
       program_id => $params->{program_id},
       service    => $params->{service},
@@ -424,7 +487,7 @@ sub _authorize_context {
 sub _validate_authorize_params {
   my ($params) = @_;
   for my $check ([program_id => 'program_id is required'], [scope => 'scope is required'],) {
-    if (!(_non_empty_scalar($params->{$check->[0]}))) {
+    if (!(_non_empty_string($params->{$check->[0]}))) {
       return ['protocol.invalid_params', $check->[1]];
     }
   }
@@ -434,6 +497,13 @@ sub _validate_authorize_params {
   if (!(ref($params->{service}{locators}) eq 'ARRAY' && @{$params->{service}{locators}})) {
     return ['protocol.invalid_params', 'service.locators must be a non-empty array'];
   }
+  if (any { !_non_empty_string($_) || /[\x00-\x20\x7f]/mxs } @{$params->{service}{locators}}) {
+    return ['protocol.invalid_params', 'service.locators must contain valid non-empty locators'];
+  }
+  if (exists($params->{service}{service_identity})
+    && !_normalize_service_identity($params->{service}{service_identity})) {
+    return ['protocol.invalid_params', 'service.service_identity must be a valid descriptor'];
+  }
   if (!(_supported_authorize_action($params->{action}))) {
     return ['auth.unsupported_action', "unsupported action: $params->{action}"];
   }
@@ -441,6 +511,26 @@ sub _validate_authorize_params {
     return ['protocol.invalid_params', 'artifacts must be a non-empty array'];
   }
   return;
+}
+
+sub _optional_session_parameter_error {
+  my ($params) = @_;
+  for my $field (qw(challenge bridge_context)) {
+    return "$field must be an object" if exists($params->{$field}) && ref($params->{$field}) ne 'HASH';
+  }
+  return 'interactive must be a boolean' if exists($params->{interactive}) && !JSON::is_bool($params->{interactive});
+  return 'identity_id must be a non-empty string'
+    if exists($params->{identity_id}) && !_non_empty_string($params->{identity_id});
+  return;
+}
+
+sub _non_empty_string {
+  my ($value) = @_;
+  return
+       defined($value)
+    && !ref($value)
+    && (B::svref_2object(\$value)->FLAGS & B::SVp_POK())
+    && length($value) ? 1 : 0;
 }
 
 sub _non_empty_scalar {
@@ -510,6 +600,7 @@ sub _persist_authorized_session {
         scope       => $context->{scope},
         action      => $context->{action},
         renewable   => 1,
+        expires_at  => $context->{expires_at},
         artifacts   => [map { _clone_hash($_) } @{$context->{artifacts}}],
       );
     }
@@ -527,7 +618,7 @@ sub _authorize_response {
 }
 
 sub _dispatch_renew {
-  my ($self, $request) = @_;
+  my ($self, $request, $caller) = @_;
   my $params = $request->{params};
 
   if (!(ref($params) eq 'HASH')) {
@@ -542,6 +633,13 @@ sub _dispatch_renew {
   my $session = $self->{sessions}{$session_handle}
     or CORE::die {code => 'protocol.invalid_params', message => 'unknown session_handle'};
 
+  _require_session_owner($session, $caller);
+  my $now = $self->_now;
+  if ( !_non_empty_scalar($session->{expires_at})
+    || $session->{expires_at} !~ /\A[0-9]+\z/mxs
+    || $now >= $session->{expires_at}) {
+    CORE::die {code => 'auth.policy_denied', message => 'session has expired'};
+  }
   if (!($session->{renewable})) {
     CORE::die {code => 'auth.policy_denied', message => 'session is not renewable'};
   }
@@ -594,7 +692,7 @@ sub _dispatch_renew {
 }
 
 sub _dispatch_revoke {
-  my ($self, $request) = @_;
+  my ($self, $request, $caller) = @_;
   my $params = $request->{params};
 
   if (!(ref($params) eq 'HASH')) {
@@ -604,6 +702,10 @@ sub _dispatch_revoke {
   my $session_handle = _session_handle_id($params->{session_handle});
   if (!(defined $session_handle)) {
     CORE::die {code => 'protocol.invalid_params', message => 'session_handle.id is required'};
+  }
+
+  if (my $session = $self->{sessions}{$session_handle}) {
+    _require_session_owner($session, $caller);
   }
 
   my ($revoked, $persist_error) = $self->_persist_mutation(
@@ -617,6 +719,23 @@ sub _dispatch_revoke {
   }
 
   return {};
+}
+
+sub _require_session_owner {
+  my ($session, $caller) = @_;
+  if (!$caller->{admin} && (($session->{program_id} || q{}) ne ($caller->{program_id} || q{}))) {
+    CORE::die {code => 'auth.policy_denied', message => 'session belongs to another program'};
+  }
+  return;
+}
+
+sub _now {
+  my ($self) = @_;
+  my $now = $self->{clock}->();
+  if (!defined($now) || ref($now) || $now !~ /\A[0-9]+\z/mxs) {
+    CORE::die {code => 'auth.internal_failure', message => 'current time is unavailable'};
+  }
+  return 0 + $now;
 }
 
 sub _resolve_identity {
@@ -739,10 +858,10 @@ sub _session_descriptor {
     service        => _clone_hash($session->{service}),
     scope          => $session->{scope},
     action         => $session->{action},
-    renewable      => $session->{renewable} ? 1 : 0,
+    renewable      => $session->{renewable} ? JSON::true : JSON::false,
   );
   if (defined $session->{expires_at} && !ref($session->{expires_at})) {
-    $descriptor{expires_at} = $session->{expires_at};
+    $descriptor{expires_at} = 0 + $session->{expires_at};
   }
   return \%descriptor;
 }
@@ -758,7 +877,13 @@ sub _normalize_policy_input {
     return;
   }
 
+  return if exists($policy->{service}) && ref($policy->{service}) ne 'HASH';
   my $service = _policy_service_input($policy);
+  return if exists($service->{service_identity}) && !_normalize_service_identity($service->{service_identity});
+  return
+    if exists($service->{locators})
+    && (ref($service->{locators}) ne 'ARRAY'
+    || any { !_non_empty_string($_) || /[\x00-\x20\x7f]/mxs } @{$service->{locators}});
   my ($locators, $service_identity) = _normalized_policy_service($service);
 
   if (!(@{$locators} || $service_identity)) {
@@ -781,7 +906,7 @@ sub _required_policy_fields {
   my %fields;
   for my $field (qw(identity_id program_id scope action)) {
     my $value = $policy->{$field};
-    if (!(defined $value && !ref($value) && length($value))) {
+    if (!_non_empty_string($value)) {
       return;
     }
     $fields{$field} = $value;
@@ -796,8 +921,8 @@ sub _policy_service_input {
   }
   return {
     _policy_locator_arg($policy),
-    (ref($policy->{locators}) eq 'ARRAY'        ? (locators         => $policy->{locators})         : ()),
-    (ref($policy->{service_identity}) eq 'HASH' ? (service_identity => $policy->{service_identity}) : ()),
+    (exists($policy->{locators})         ? (locators         => $policy->{locators})         : ()),
+    (exists($policy->{service_identity}) ? (service_identity => $policy->{service_identity}) : ()),
   };
 }
 
@@ -827,10 +952,10 @@ sub _normalize_service_identity {
 
   my $scheme = $service_identity->{scheme};
   my $value  = $service_identity->{value};
-  if (!(defined $scheme && !ref($scheme) && length($scheme))) {
+  if (!_non_empty_string($scheme)) {
     return;
   }
-  if (!(defined $value && !ref($value) && length($value))) {
+  if (!_non_empty_string($value)) {
     return;
   }
 
@@ -864,10 +989,8 @@ sub _persist_mutation {
   if (ref($writer) eq 'CODE') {
     my $ok = eval { $writer->($self->_persistent_state) };
     if ($EVAL_ERROR || !$ok) {
-      my $message = $EVAL_ERROR || 'auth state write failed';
-      chomp $message;
       $self->_restore_mutable_state_snapshot($snapshot);
-      return (undef, ['auth.internal_failure', $message]);
+      return (undef, ['auth.internal_failure', 'Unable to persist authentication state']);
     }
   }
 
@@ -912,6 +1035,9 @@ sub _service_pin_state {
   my $identity = $service->{service_identity};
 
   if (!(ref($identity) eq 'HASH')) {
+    if (any { exists $self->{service_pins}{$_} } @{$service->{locators} || []}) {
+      return (undef, ['auth.service_identity_mismatch', 'pinned service identity is missing']);
+    }
     return ('provisional', undef);
   }
 
@@ -968,11 +1094,12 @@ sub _build_artifact {
   }
 
   my ($event, $event_error) = _event_for_action(
-    key       => $key,
-    action    => $args{action},
-    scope     => $args{scope},
-    challenge => $args{challenge},
-    params    => $params,
+    key        => $key,
+    created_at => $self->_now,
+    action     => $args{action},
+    scope      => $args{scope},
+    challenge  => $args{challenge},
+    params     => $params,
   );
   if (!($event)) {
     return (undef, $event_error);
@@ -1004,7 +1131,23 @@ sub _artifact_params {
   if (!(ref($artifact->{params}) eq 'HASH')) {
     return (undef, ['protocol.invalid_params', 'artifact params must be an object']);
   }
-  return ($artifact->{params}, undef);
+  my $params = $artifact->{params};
+  my $valid  = eval {
+    Overnet::Core::Nostr::Event->assert_wire_types(
+      {
+        id         => q{},
+        pubkey     => q{},
+        sig        => q{},
+        content    => q{},
+        created_at => 0,
+        kind       => $params->{kind},
+        tags       => $params->{tags},
+      }
+    );
+    1;
+  };
+  return (undef,   ['protocol.invalid_params', 'artifact kind and tags must have Nostr wire types']) if !$valid;
+  return ($params, undef);
 }
 
 sub _event_for_action {
@@ -1029,7 +1172,7 @@ sub _auth_event_for_artifact {
       key        => $args{key},
       challenge  => $args{challenge}{value},
       scope      => $args{scope},
-      created_at => _created_at(),
+      created_at => $args{created_at},
     ),
     undef
   );
@@ -1073,6 +1216,9 @@ sub _delegation_event_for_artifact {
   if (!($tags)) {
     return (undef, $error);
   }
+  if ($tags->{expires_at} <= $args{created_at}) {
+    return (undef, ['protocol.invalid_params', 'delegation expiry must be in the future']);
+  }
   return (
     Overnet::Authority::Delegation->create_delegation_grant_event(
       key             => $args{key},
@@ -1081,7 +1227,7 @@ sub _delegation_event_for_artifact {
       delegate_pubkey => $tags->{delegate},
       session_id      => $tags->{session},
       expires_at      => $tags->{expires_at},
-      created_at      => _created_at(),
+      created_at      => $args{created_at},
       (defined($tags->{nick}) ? (nick => $tags->{nick}) : ()),
     ),
     undef
@@ -1142,10 +1288,28 @@ sub _identity_signing_key {
   if (!($backend)) {
     return (undef, $backend_error);
   }
-  return $backend->load_signing_key(
-    identity       => $identity,
-    backend_config => $identity->{backend_config},
-  );
+  my ($key, $error);
+  my $ok = eval {
+    ($key, $error) = $backend->load_signing_key(
+      identity       => $identity,
+      backend_config => $identity->{backend_config},
+    );
+    my $public = $identity->{public_identity};
+    $key
+      && !$error
+      && ref($public) eq 'HASH'
+      && ($public->{scheme} || q{}) eq 'nostr.pubkey'
+      && defined($public->{value})
+      && $public->{value} eq $key->pubkey_hex;
+  };
+  return (
+    undef,
+    {
+      code    => 'auth.backend_unavailable',
+      message => 'Unable to use the selected signing identity'
+    }
+  ) if !$ok;
+  return ($key, undef);
 }
 
 sub _session_handle_id {
@@ -1163,8 +1327,9 @@ sub _first_tag_values {
   my ($tags) = @_;
   my %values;
 
-  for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+  return %values if ref($tags) ne 'ARRAY';
+  for my $tag (@{$tags}) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     if (exists $values{$tag->[0]}) {
@@ -1174,10 +1339,6 @@ sub _first_tag_values {
   }
 
   return %values;
-}
-
-sub _created_at {
-  return int(time());
 }
 
 sub _clone_hash {
@@ -1299,7 +1460,17 @@ Public API entry point.
 
 =head2 dispatch
 
-Public API entry point.
+C<dispatch($request, caller =E<gt> {program_id =E<gt> $id, admin =E<gt> $bool})>
+accepts caller context only from the trusted embedding host. Request fields do
+not supply that context. Without a bound identity the agent allows discovery
+but refuses signing, remembered approvals and session operations. Administration
+requires C<admin>; sessions are otherwise restricted to C<program_id>.
+
+The host must establish these facts independently of the request. The default
+native socket daemon has no platform program-identity resolver and therefore
+cannot sign or administer policy until one is provided by its trusted host.
+Local renewal handles expire after at most five minutes and never outlive a
+requested delegation. Legacy persisted sessions without expiry cannot renew.
 
 =head1 DIAGNOSTICS
 

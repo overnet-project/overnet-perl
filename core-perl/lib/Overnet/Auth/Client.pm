@@ -239,6 +239,7 @@ sub _read_response {
     }
 
     my $response = $messages->[0];
+    croak "auth-agent must send a response\n" if ($response->{type} || q{}) ne 'response';
     my ($ok, $code, $message) =
       $self->{protocol}->validate_message($response);
     if (!($ok)) {

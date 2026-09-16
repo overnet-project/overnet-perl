@@ -3,14 +3,18 @@ package Overnet::Relay::Store::File;
 use strictures 2;
 use Moo;
 
-extends 'Net::Nostr::RelayStore';
+extends 'Overnet::Relay::Store';
 
 use Carp           qw(croak);
 use English        qw(-no_match_vars);
 use File::Basename qw(dirname);
 use File::Path     qw(make_path);
 use JSON           ();
+use IO::Handle     ();
+use File::Temp     qw(tempfile);
+use Overnet::Core::Nostr::Event;
 use Net::Nostr::Event;
+use Overnet::Core::JSON ();
 
 our $VERSION = '0.001';
 
@@ -42,6 +46,16 @@ around new => sub {
   return $self;
 };
 
+for my $method (
+  qw(store delete_by_id clear query all_events get_by_id find_addressable find_replaceable acceptance_for discarded_state discarded_removal)
+) {
+  around $method => sub {
+    my ($orig, $self, @args) = @_;
+    croak 'Relay store is unavailable after a persistence failure; reopen it' if $self->{_write_failed};
+    return $self->$orig(@args);
+  };
+}
+
 no Moo;
 
 sub _constructor_args_hash {
@@ -52,32 +66,39 @@ sub _constructor_args_hash {
 }
 
 sub store {
-  my ($self, $event) = @_;
-  my $stored = Net::Nostr::RelayStore::store($self, $event);
-  if ($stored) {
-    $self->_persist_record([q{+}, $event->to_hash]);
-  }
+  my ($self, $event, $accepted_at) = @_;
+  return 0 if $self->get_by_id($event->id);
+  $self->_persist_record([q{+}, $event->to_hash, $accepted_at]);
+  local $self->{_storing} = 1;    ## no critic (Variables::ProhibitLocalVars) -- Restore the nested persistence guard on exception.
+  my $stored = Overnet::Relay::Store::store($self, $event, $accepted_at);
+  $self->_maybe_compact;
   return $stored;
 }
 
 sub delete_by_id {
   my ($self, $id) = @_;
-  my $deleted = Net::Nostr::RelayStore::delete_by_id($self, $id);
-  if ($deleted) {
+  return if !$self->get_by_id($id);
+  if (!$self->{_replaying}) {
     $self->_persist_record([q{-}, $id]);
+  }
+  my $deleted = Overnet::Relay::Store::delete_by_id($self, $id);
+  if (!$self->{_replaying} && !$self->{_storing}) {
+    $self->_maybe_compact;
   }
   return $deleted;
 }
 
 sub clear {
   my ($self) = @_;
-  Net::Nostr::RelayStore::clear($self);
-  $self->_compact_to_disk;
+  Overnet::Relay::Store::clear($self);
+  my $ok = eval { $self->_compact_to_disk; 1; };
+  if (!$ok) { $self->{_write_failed} = 1; croak $EVAL_ERROR; }
   return 1;
 }
 
 sub _load_from_disk {
   my ($self) = @_;
+  local $self->{_replaying} = 1;    ## no critic (Variables::ProhibitLocalVars) -- Replay must never append, including nested eviction.
   my $path = $self->{path};
   if (!-e $path) {
     return 1;
@@ -86,7 +107,7 @@ sub _load_from_disk {
   open my $fh, '<:raw', $path
     or croak "Can't open relay store file $path for reading: $OS_ERROR";
   my $raw = do { local $INPUT_RECORD_SEPARATOR = undef; <$fh> };
-  close $fh    # uncoverable branch true reason: close cannot fail on a readable handle here
+  close $fh                         # uncoverable branch true reason: close cannot fail on a readable handle here
     or croak "Can't close relay store file $path after reading: $OS_ERROR";
 
   if (!(defined $raw && length $raw)) {
@@ -103,14 +124,14 @@ sub _load_from_disk {
 
     my $decoded;
     my $ok = eval {
-      $decoded = $JSON->decode($line);
+      $decoded = Overnet::Core::JSON::decode_json($line);
       1;
     };
     if (!$ok) {
 
       # A torn final line can result from a crash mid-append; tolerate it but
       # treat any earlier undecodable line as genuine corruption.
-      if ($index == $#lines) {
+      if ($index == $#lines && $raw !~ /\n\z/mxs) {
         next;
       }
       croak "Invalid relay store file $path: $EVAL_ERROR";
@@ -124,7 +145,7 @@ sub _load_from_disk {
   # The on-disk log may hold the legacy single-array format, superseded
   # records, or tombstones. Leave the file untouched for read-only consumers
   # (for example the backup tool) and normalize it on the first mutation.
-  $self->{_needs_rewrite} = $records ? 1 : 0;
+  $self->{_needs_rewrite} = length($raw) ? 1 : 0;
   return 1;
 }
 
@@ -137,46 +158,71 @@ sub _replay_record {
   my $tag = $decoded->[0];
   if (!@{$decoded} || ref($tag) eq 'HASH') {
 
-    # Legacy format: one line holding the full array of wire events.
-    my $count = 0;
-    for my $wire (@{$decoded}) {
-      if (ref($wire) ne 'HASH') {
-        next;
-      }
-      Net::Nostr::RelayStore::store($self, Net::Nostr::Event->from_wire($wire));
-      $count++;
-    }
-    return $count;
+    return $self->_replay_legacy($decoded);
   }
   if (!ref($tag) && $tag eq q{+} && ref($decoded->[1]) eq 'HASH') {
-    Net::Nostr::RelayStore::store($self, Net::Nostr::Event->from_wire($decoded->[1]));
+    Overnet::Core::Nostr::Event->assert_wire_types($decoded->[1]);
+    croak 'Invalid acceptance time'
+      if defined($decoded->[2])
+      && (ref($decoded->[2]) || $decoded->[2] !~ /\A[0-9]+\z/mxs);
+    Overnet::Relay::Store::store($self, Net::Nostr::Event->from_wire($decoded->[1]), $decoded->[2]);
     return 1;
   }
   if (!ref($tag) && $tag eq q{-} && defined $decoded->[1] && !ref($decoded->[1])) {
-    Net::Nostr::RelayStore::delete_by_id($self, $decoded->[1]);
+    Overnet::Relay::Store::delete_by_id($self, $decoded->[1]);
+    return 1;
+  }
+
+  if (!ref($tag) && $tag eq 'evidence' && ref($decoded->[1]) eq 'HASH') {
+    my $evidence = $decoded->[1];
+    for my $field (qw(_discarded_states _discarded_removals)) {
+      croak "Invalid retention evidence" if ref($evidence->{$field}) ne 'HASH';
+      $self->{$field} = $evidence->{$field};
+    }
     return 1;
   }
 
   croak "Relay store file $path contains an unrecognized record";
 }
 
+sub _replay_legacy {
+  my ($self, $events) = @_;
+  for my $wire (@{$events}) {
+    croak 'Invalid event in legacy relay store' if ref($wire) ne 'HASH';
+    Overnet::Core::Nostr::Event->assert_wire_types($wire);
+    Overnet::Relay::Store::store($self, Net::Nostr::Event->from_wire($wire));
+  }
+  return scalar @{$events};
+}
+
 sub _persist_record {
   my ($self, $entry) = @_;
 
-  # A store loaded from a legacy or churned log is normalized on first write:
-  # a single full rewrite replaces the whole file with one record per live
-  # event, after which further writes append.
-  if ($self->{_needs_rewrite}) {
-    return $self->_compact_to_disk;
+  my $ok = eval {
+    if ($self->{_needs_rewrite}) {
+      $self->_compact_to_disk;
+    }
+    $self->_append_record($entry);
+    $self->{_records_on_disk}++;
+    1;
+  };
+  if (!$ok) {
+    $self->{_write_failed} = 1;
+    croak $EVAL_ERROR;
   }
+  return 1;
+}
 
-  $self->_append_record($entry);
-  $self->{_records_on_disk}++;
-
+sub _maybe_compact {
+  my ($self) = @_;
   my $live = $self->event_count;
   if ( $self->{_records_on_disk} >= $COMPACT_MIN_RECORDS
     && $self->{_records_on_disk} >= $COMPACT_LIVE_FACTOR * ($live + 1)) {
-    $self->_compact_to_disk;
+    my $ok = eval { $self->_compact_to_disk; 1; };
+    if (!$ok) {
+      $self->{_write_failed} = 1;
+      croak $EVAL_ERROR;
+    }
   }
   return 1;
 }
@@ -188,10 +234,8 @@ sub _append_record {
 
   open my $fh, '>>:raw', $path
     or croak "Can't open relay store file $path for appending: $OS_ERROR";
-  print {$fh} $JSON->encode($entry) . "\n"
-    or croak "Can't append to relay store file $path: $OS_ERROR";
-  close $fh
-    or croak "Can't close relay store file $path after appending: $OS_ERROR";
+  _write_payload($fh, $JSON->encode($entry) . "\n", "relay store file $path", 'append to');
+  $self->_sync_directory;
   return 1;
 }
 
@@ -201,23 +245,61 @@ sub _compact_to_disk {
   $self->_ensure_directory($path);
 
   # uncoverable branch true reason: all_events always returns an array reference
-  my @records = map { $JSON->encode([q{+}, $_->to_hash]) } @{$self->all_events || []};
+  my @records = map { $JSON->encode([q{+}, $_->to_hash, $self->{_accepted_at}{$_->id}]) } @{$self->all_events || []};
+  if (keys %{$self->{_discarded_states} || {}} || keys %{$self->{_discarded_removals} || {}}) {
+    push @records,
+      $JSON->encode(
+      [
+        'evidence',
+        {
+          _discarded_states   => $self->{_discarded_states}   || {},
+          _discarded_removals => $self->{_discarded_removals} || {},
+        }
+      ]
+      );
+  }
   my $payload = @records ? join("\n", @records) . "\n" : q{};
 
-  my $tmp_path = $path . '.tmp.' . $PROCESS_ID;
-  open my $fh, '>:raw', $tmp_path
-    or croak "Can't open relay store temp file $tmp_path for writing: $OS_ERROR";
-  print {$fh} $payload
-    or croak "Can't write relay store temp file $tmp_path: $OS_ERROR";
-  close $fh
-    or croak "Can't close relay store temp file $tmp_path: $OS_ERROR";
+  my ($fh, $tmp_path) = tempfile('.overnet-store-XXXXXX', DIR => dirname($path), UNLINK => 1);
+  binmode $fh, ':raw';
+  _write_payload($fh, $payload, "relay store temp file $tmp_path", 'write');
 
   rename $tmp_path, $path
     or croak "Can't rename relay store temp file $tmp_path to $path: $OS_ERROR";
 
+  $self->_sync_directory;
   $self->{_records_on_disk} = scalar @records;
   $self->{_needs_rewrite}   = 0;
   return 1;
+}
+
+sub _write_payload {
+  my ($fh, $payload, $label, $operation) = @_;
+
+  # Keep the handle alive across the exception, then close it explicitly.
+  # An implicit close during unwinding can replace the original write error.
+  my $ok = eval {
+    print {$fh} $payload      or croak "Can't $operation $label: $OS_ERROR";
+    ($fh->flush && $fh->sync) or croak "Can't sync $label: $OS_ERROR";
+    1;
+  };
+  my $error  = $EVAL_ERROR;
+  my $closed = close $fh;
+  if (!$ok) {
+    croak $error;
+  }
+  if (!$closed) {
+    croak "Can't close $label: $OS_ERROR";
+  }
+  return 1;
+}
+
+sub _sync_directory {
+  my ($self) = @_;
+  open my $dir, '<', dirname($self->{path}) or croak "Can't open store directory: $OS_ERROR";
+  $dir->sync or croak "Can't sync store directory: $OS_ERROR";
+  close $dir or croak "Can't close store directory: $OS_ERROR";
+  return;
 }
 
 sub _ensure_directory {
@@ -262,6 +344,25 @@ Creates a file-backed store.
 =head2 path
 
 Returns the configured store path.
+
+=head2 query
+
+=head2 all_events
+
+=head2 get_by_id
+
+=head2 find_addressable
+
+=head2 find_replaceable
+
+=head2 acceptance_for
+
+=head2 discarded_state
+
+=head2 discarded_removal
+
+These inherited read operations refuse access after a persistence failure. Reopen
+the store to recover its durable state before making authorization decisions.
 
 =head2 store
 

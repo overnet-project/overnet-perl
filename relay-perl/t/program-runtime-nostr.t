@@ -3,6 +3,7 @@ use Test::More;
 use File::Spec;
 use File::Temp qw(tempdir);
 use FindBin;
+use JSON ();
 use IPC::Open3  qw(open3);
 use POSIX       qw(WNOHANG);
 use Symbol      qw(gensym);
@@ -206,11 +207,12 @@ subtest 'delegation helper validates authoritative auth events and delegation gr
       ['server',     'irc://irc.example.test/overnet'],
       ['delegate',   $delegate_key->pubkey_hex],
       ['session',    'session-abc'],
-      ['expires_at', 1_744_304_600],
+      ['expires_at', '1744304600'],
     ],
   )->to_hash;
 
   my $grant = Overnet::Authority::Delegation->verify_delegation_grant(
+    now              => 1_744_301_100,
     authority_pubkey => $authority_key->pubkey_hex,
     relay_url        => 'ws://127.0.0.1:7448',
     scope            => 'irc://irc.example.test/overnet',
@@ -224,6 +226,7 @@ subtest 'delegation helper validates authoritative auth events and delegation gr
   is $grant->{event_id}, $grant_event->{id}, 'helper returns the accepted delegation event id';
 
   my $bad_grant = Overnet::Authority::Delegation->verify_delegation_grant(
+    now              => 1_744_301_100,
     authority_pubkey => $authority_key->pubkey_hex,
     relay_url        => 'ws://127.0.0.1:7448',
     scope            => 'irc://irc.example.test/overnet',
@@ -374,7 +377,7 @@ subtest 'nostr services publish events, seed snapshots, and queue relay-backed s
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-1',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr',
@@ -504,7 +507,7 @@ subtest 'nostr subscriptions merge multi-filter relay snapshots and refreshes' =
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-multi',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr-multi',
@@ -573,7 +576,7 @@ subtest 'nostr subscriptions survive live relay restart, preserve snapshots, and
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-restart',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr-restart',
@@ -593,7 +596,7 @@ subtest 'nostr subscriptions survive live relay restart, preserve snapshots, and
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-restart',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr-restart',
@@ -633,7 +636,7 @@ subtest 'nostr subscriptions survive live relay restart, preserve snapshots, and
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-restart',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr-restart',
@@ -754,7 +757,7 @@ subtest
     'nostr.read_subscription_snapshot',
     {
       subscription_id => 'relay-sub-persist',
-      refresh         => 1,
+      refresh         => JSON::true,
     },
     permissions => ['nostr.read'],
     session_id  => 'session-nostr-persist-read',

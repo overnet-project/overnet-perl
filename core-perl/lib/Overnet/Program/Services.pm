@@ -5,6 +5,7 @@ use Moo;
 use Carp         qw(croak);
 use English      qw(-no_match_vars);
 use JSON         ();
+use B            ();
 use Scalar::Util qw(weaken);
 use Overnet::CommandBus;
 use Overnet::Core::Nostr;
@@ -159,7 +160,7 @@ sub map_input {
   my $input = $args{input};
 
   _require_object_param('input', $input);
-  my $session = _require_adapter_session($self->{runtime}, $session_id);
+  my $session = _require_adapter_session($self->{runtime}, $session_id, $args{session_id});
   return _normalize_adapter_result(
     %{
       _call_adapter(
@@ -179,7 +180,7 @@ sub derive {
   my $input = $args{input};
 
   _require_object_param('input', $input);
-  my $session = _require_adapter_session($self->{runtime}, $session_id);
+  my $session = _require_adapter_session($self->{runtime}, $session_id, $args{session_id});
   return _normalize_adapter_result(
     %{
       _call_adapter(
@@ -200,7 +201,7 @@ sub close_adapter_session {
   my ($self, %args) = @_;
   my $session_id = _require_string_param('adapter_session_id', $args{adapter_session_id});
 
-  _require_adapter_session($self->{runtime}, $session_id);
+  _require_adapter_session($self->{runtime}, $session_id, $args{session_id});
   $self->{runtime}->close_adapter_session($session_id);
   return {};
 }
@@ -396,9 +397,7 @@ sub query_nostr_events {
   my ($self, %args) = @_;
   my $relay_url = _require_string_param('relay_url', $args{relay_url});
   my $filters   = _require_array_param('filters', $args{filters});
-  if (!(@{$filters})) {
-    _invalid_params('filters must be a non-empty array', {param => 'filters'},);
-  }
+  _validate_nostr_filters($filters);
 
   my %query_args = (
     relay_url => $relay_url,
@@ -650,10 +649,10 @@ sub _build_bus {
     'nostr.close_subscription'         => {impl => 'close_nostr_subscription',         context => ['session_id']},
     'timers.schedule'                  => {impl => 'schedule_timer',                   context => ['session_id']},
     'timers.cancel'                    => {impl => 'cancel_timer',                     context => ['session_id']},
-    'adapters.open_session'            => {impl => 'open_adapter_session', context => [qw(session_id program_id)]},
-    'adapters.map_input'               => {impl => 'map_input'},
-    'adapters.derive'                  => {impl => 'derive'},
-    'adapters.close_session'           => {impl => 'close_adapter_session'},
+    'adapters.open_session'            => {impl => 'open_adapter_session',  context => [qw(session_id program_id)]},
+    'adapters.map_input'               => {impl => 'map_input',             context => ['session_id']},
+    'adapters.derive'                  => {impl => 'derive',                context => ['session_id']},
+    'adapters.close_session'           => {impl => 'close_adapter_session', context => ['session_id']},
     'overnet.emit_event'               => {impl => 'emit_event'},
     'overnet.emit_state'               => {impl => 'emit_state'},
     'overnet.emit_private_message'     => {impl => 'emit_private_message'},
@@ -707,9 +706,8 @@ sub _call_adapter {
       CORE::die $error;
     }
 
-    chomp $error;
     _service_unavailable(
-      $error,
+      'Adapter operation failed',
       {
         method     => $method,
         adapter_id => $session->adapter_id,
@@ -910,10 +908,15 @@ sub _validate_adapter_capability_items {
 }
 
 sub _require_adapter_session {
-  my ($runtime, $session_id) = @_;
+  my ($runtime, $session_id, $owner) = @_;
   my $session = $runtime->get_adapter_session($session_id);
 
-  if (!(defined $session)) {
+  if (
+    !defined($session)
+    || (defined($session->program_session_id) || defined($owner)) && (!defined($owner)
+      || !defined($session->program_session_id)
+      || $owner ne $session->program_session_id)
+  ) {
     _invalid_params(
       "Unknown adapter_session_id: $session_id",
       {
@@ -980,7 +983,7 @@ sub _require_present_param {
 
 sub _require_string_param {
   my ($name, $value) = @_;
-  if (!(defined $value && !ref($value) && length($value))) {
+  if (!(_json_string($value) && length($value))) {
     _invalid_params("$name is required", {param => $name});
   }
   return $value;
@@ -988,7 +991,7 @@ sub _require_string_param {
 
 sub _require_optional_string_param {
   my ($name, $value) = @_;
-  if (!defined $value || ref($value)) {
+  if (!_json_string($value)) {
     _invalid_params("$name must be a string", {param => $name});
   }
   return $value;
@@ -1052,9 +1055,23 @@ sub _require_secret_handle_map_param {
   return \%validated;
 }
 
+sub _json_string {
+  my ($value) = @_;
+  return defined($value) && !ref($value) && (B::svref_2object(\$value)->FLAGS & B::SVp_POK());
+}
+
+sub _json_integer {
+  my ($value) = @_;
+  return
+       defined($value)
+    && !ref($value)
+    && (B::svref_2object(\$value)->FLAGS & (B::SVp_IOK() | B::SVp_NOK()))
+    && $value =~ /\A-?[0-9]+\z/mxs;
+}
+
 sub _require_integer_param {
   my ($name, $value) = @_;
-  if (!(defined $value && !ref($value) && $value =~ /\A-?\d+\z/mxs)) {
+  if (!(_json_integer($value))) {
     _invalid_params("$name must be an integer", {param => $name});
   }
   return 0 + $value;
@@ -1062,7 +1079,7 @@ sub _require_integer_param {
 
 sub _require_non_negative_integer_param {
   my ($name, $value) = @_;
-  if (!(defined $value && !ref($value) && $value =~ /\A\d+\z/mxs)) {
+  if (!(_json_integer($value) && $value >= 0)) {
     _invalid_params("$name must be a non-negative integer", {param => $name});
   }
   return 0 + $value;
@@ -1070,7 +1087,7 @@ sub _require_non_negative_integer_param {
 
 sub _require_positive_integer_param {
   my ($name, $value) = @_;
-  if (!(defined $value && !ref($value) && $value =~ /\A[1-9]\d*\z/mxs)) {
+  if (!(_json_integer($value) && $value > 0)) {
     _invalid_params("$name must be a positive integer", {param => $name});
   }
   return 0 + $value;
@@ -1081,10 +1098,7 @@ sub _require_boolean_param {
   if (JSON::is_bool($value)) {
     return $value ? 1 : 0;
   }
-  if (defined $value && !ref($value) && ($value eq '0' || $value eq '1')) {
-    return 0 + $value;
-  }
-  _invalid_params("$name must be 0 or 1", {param => $name});
+  _invalid_params("$name must be a boolean", {param => $name});
   return;
 }
 
@@ -1099,7 +1113,7 @@ sub _validate_subscription_query {
   }
 
   if (exists $query->{kind}) {
-    if (!(defined $query->{kind} && !ref($query->{kind}) && $query->{kind} =~ /\A-?\d+\z/mxs)) {
+    if (!(_json_integer($query->{kind}))) {
       _invalid_params('query.kind must be an integer', {param => 'query.kind'},);
     }
   }
@@ -1108,7 +1122,7 @@ sub _validate_subscription_query {
     if (!(exists $query->{$field})) {
       next;
     }
-    if (!(defined $query->{$field} && !ref($query->{$field}) && length($query->{$field}))) {
+    if (!(_json_string($query->{$field}) && length($query->{$field}))) {
       _invalid_params("query.$field must be a non-empty string", {param => "query.$field"},);
     }
   }

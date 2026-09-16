@@ -170,14 +170,10 @@ subtest 'sync policy gates NEG-OPEN handling' => sub {
   my $ne     = Net::Nostr::Negentropy->new;
   $ne->seal;
 
-  # KNOWN BUG: the sync denial path builds its NEG-ERR frame with code and
-  # reason arguments that Net::Nostr::Message rejects, so a policy-denied
-  # NEG-OPEN currently dies instead of sending NEG-ERR. This coverage-only
-  # change set may not alter lib/ behavior, so pin the current behavior; the
-  # eventual fix must update this assertion to expect a NEG-ERR frame.
-  like dies { $closed->_handle_neg_open(1, _neg_open_message($ne)) },
-    qr/unknown\ argument\(s\):\ code,\ reason/mx,
-    'closed sync denial currently dies building its NEG-ERR frame';
+  $closed->_handle_neg_open(1, _neg_open_message($ne));
+  my $denied = _last_message_of_type($closed->_connections->{1}, 'NEG-ERR');
+  ok $denied, 'closed sync receives a NEG-ERR frame';
+  like $denied->message, qr/\Apolicy_denied:/mx, 'sync denial carries the policy outcome';
 
   my $open    = _build_deploy_relay();
   my $open_ne = Net::Nostr::Negentropy->new;
@@ -189,56 +185,36 @@ subtest 'sync policy gates NEG-OPEN handling' => sub {
 
 subtest 'object_read policy gates the object HTTP endpoint' => sub {
   my $closed = _build_deploy_relay(service_policies => {object_read => 'closed'});
-  my $response = $closed->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b');
+  my $response = $closed->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b&author=' . $author->pubkey_hex);
   like $response, qr/\AHTTP\/1\.1\ 403\ Forbidden/mx, 'closed object_read returns HTTP 403';
   like $response, qr/policy_denied/mx, 'closed object_read body carries the policy_denied code';
 
   my $auth = _build_deploy_relay(service_policies => {object_read => 'auth'});
-  $response = $auth->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b');
+  $response = $auth->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b&author=' . $author->pubkey_hex);
   like $response, qr/\AHTTP\/1\.1\ 401\ Unauthorized/mx,
     'auth object_read returns HTTP 401 because HTTP requests carry no connection';
   like $response, qr/unauthorized/mx, 'auth object_read body carries the unauthorized code';
 
   my $paid = _build_deploy_relay(service_policies => {object_read => 'paid'});
-  $response = $paid->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b');
+  $response = $paid->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b&author=' . $author->pubkey_hex);
   like $response, qr/\AHTTP\/1\.1\ 402\ Payment\ Required/mx, 'paid object_read returns HTTP 402';
   like $response, qr/payment_required/mx, 'paid object_read body carries the payment_required code';
 
   my $open = _build_deploy_relay();
-  $response = $open->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b');
+  $response = $open->_handle_object_http_request('GET', '/.well-known/overnet/v1/object?type=a&id=b&author=' . $author->pubkey_hex);
   like $response, qr/\AHTTP\/1\.1\ 404\ Not\ Found/mx,
     'open object_read falls through to the normal object endpoint';
 };
 
-subtest 'service policy helpers cover degenerate inputs' => sub {
+subtest 'missing policy configuration fails closed through publication' => sub {
   my $relay = _build_deploy_relay();
-
-  $relay->service_policies(undef);
-  is $relay->_service_policy_message('publish', 1), undef,
-    'a missing policy map behaves as open';
-  $relay->service_policies({});
-  is $relay->_service_policy_message('publish', 1), undef,
-    'a missing service entry behaves as open';
-
-  is $relay->_service_policy_http_error('object_read'), undef,
-    'open object_read produces no HTTP error response';
-
-  my $body = $relay->_service_policy_http_body('weird message without prefix');
-  is $JSON->decode($body)->{error}{code}, 'policy_denied',
-    'unprefixed policy messages fall back to the policy_denied code';
-
-  is $relay->_connection_is_authenticated(undef), 0,
-    'undefined connection ids are unauthenticated';
-  $relay->_authenticated({1 => 'not-a-hash'});
-  is $relay->_connection_is_authenticated(1), 0,
-    'non-hash authentication state is unauthenticated';
-  $relay->_authenticated({1 => {}});
-  is $relay->_connection_is_authenticated(1), 0,
-    'empty authentication state is unauthenticated';
-  $relay->_authenticated({1 => {abc => 1}});
-  is $relay->_connection_is_authenticated(1), 1,
-    'a connection with an authenticated pubkey is authenticated';
+  for my $policy (undef, {}) {
+    $relay->service_policies($policy);
+    $relay->_handle_event(1, _create_overnet_event());
+    my $result = _last_message_of_type($relay->_connections->{1}, 'OK');
+    ok !$result->accepted, 'no policy cannot authorize publication';
+    like $result->message, qr/\Apolicy_denied:/, 'the real publication path returns a policy error';
+  }
 };
 
 done_testing;
-

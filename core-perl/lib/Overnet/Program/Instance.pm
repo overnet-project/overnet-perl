@@ -174,7 +174,18 @@ sub process_program_message {
   my ($self, $message) = @_;
 
   my ($ok, $code, $error) = $self->{protocol}->validate_message($message);
-  if (!($ok)) {
+  if (!$ok) {
+    if ( $self->{state} eq 'ready'
+      && $message->{type} eq 'request'
+      && ($code eq 'protocol.unknown_method' || $code eq 'protocol.invalid_params')) {
+      return {
+        send => Overnet::Program::Protocol::build_response_error(
+          id      => $message->{id},
+          code    => $code,
+          message => $error
+        )
+      };
+    }
     croak "$code: $error\n";
   }
 
@@ -205,6 +216,14 @@ sub process_program_message {
   }
 
   croak "Cannot process messages in state $state\n";
+}
+
+sub abort_session {
+  my ($self) = @_;
+  $self->{state}    = 'failed';
+  $self->{inflight} = {};
+  $self->_revoke_secret_handles;
+  return;
 }
 
 sub request_shutdown {
@@ -394,7 +413,9 @@ sub _handle_service_request {
       $message->{params} || {},
       permissions => $self->{permissions},
       session_id  => $self->{instance_id},
-      program_id  => $self->_known_program_id,
+
+      # A hello name is descriptive, not authority for per-program policy.
+      program_id => $self->{program_id},
     );
     1;
   } or $error = $EVAL_ERROR;
@@ -482,7 +503,8 @@ sub _handle_post_shutdown_message {
   }
 
   if ($message->{type} eq 'response') {
-    my $method = delete $self->{inflight}{$message->{id}};
+    my $method = delete $self->{inflight}{$message->{id}}
+      or croak "protocol.unknown_request_id: Unexpected response after shutdown\n";
     return {
       (defined $method ? (response_to => $method) : ()),
       ok => $message->{ok} ? 1 : 0,
@@ -519,14 +541,6 @@ sub _select_protocol_version {
   }
 
   return;
-}
-
-sub _known_program_id {
-  my ($self) = @_;
-  if (defined $self->{program_id} && length $self->{program_id}) {
-    return $self->{program_id};
-  }
-  return $self->{peer_program_id};
 }
 
 sub _revoke_secret_handles {
@@ -594,6 +608,12 @@ Public API entry point.
 =head2 process_program_message
 
 Public API entry point.
+
+=head2 abort_session
+
+Marks the session failed and revokes its secret handles after a transport or
+protocol failure. Further messages are refused. The host releases other
+runtime resources and terminates the child.
 
 =head2 request_shutdown
 

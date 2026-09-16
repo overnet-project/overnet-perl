@@ -60,6 +60,7 @@ subtest 'a non-IRC application completes the shared exchange through the auth ag
           %{$request},
         },
       },
+      caller => {program_id => 'shared-list'},
     );
     ok $reply->{ok}, 'the agent accepts ' . $request->{action};
     push @events, $reply->{result}{artifacts}[0]{value};

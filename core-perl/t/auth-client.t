@@ -134,7 +134,7 @@ subtest 'sessions_authorize preserves structured error responses' => sub {
       my $response = $client->sessions_authorize(
         program_id  => 'irc.bridge',
         identity_id => 'default',
-        interactive => 0,
+        interactive => JSON::false,
         service     => {
           locators => ['irc://irc.example.test/overnet'],
         },
@@ -509,7 +509,8 @@ sub _with_auth_server {
         is $requested_endpoint, $endpoint, 'client requested the expected endpoint';
         socketpair(my $server_socket, my $client_socket, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
           or die "socketpair failed: $!";
-        my $server = Overnet::Auth::Server->new(agent => $args{agent},);
+        my $server = Overnet::Auth::Server->new(agent => $args{agent},
+          caller_resolver => sub { +{program_id => 'irc.bridge', admin => 1} });
         my $child  = fork();
         die "fork failed: $!" unless defined $child;
         if (!$child) {

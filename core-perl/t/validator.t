@@ -121,6 +121,7 @@ sub _delegated_removal_errors {
   my $result     = Overnet::Core::Validator::validate(
     $removal,
     {
+      now              => 1_744_301_000,
       target_event     => $target,
       delegation_event => exists $args{delegation_context} ? $args{delegation_context} : $delegation,
     },

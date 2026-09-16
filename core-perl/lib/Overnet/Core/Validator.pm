@@ -4,8 +4,9 @@ use strictures 2;
 use English qw(-no_match_vars);
 use Encode  qw(encode FB_CROAK LEAVE_SRC);
 use B       ();
-use JSON    ();
 use Net::Nostr::Event;
+use Overnet::Core::JSON         ();
+use Overnet::Core::Nostr::Event ();
 
 our $VERSION = '0.001';
 
@@ -18,10 +19,13 @@ my %MIRROR_TAG = (
   overnet_ot  => 'o',
   overnet_oid => 'd',
 );
-my $JSON = JSON->new->utf8;
 
 sub validate {
   my ($input, $context) = @_;
+  $context = ref($context) eq 'HASH' ? {%{$context}} : {};
+  if (($context->{_depth} // 0) > 64) {
+    return _result(errors => ['Removal authorization chain exceeds the validation limit']);
+  }
   my @errors;
 
   my ($event, $event_error) = _parse_event($input, 'Invalid Nostr event');
@@ -48,7 +52,14 @@ sub validate {
 sub _parse_event {
   my ($input, $prefix) = @_;
   my $event;
-  my $ok    = eval { $event = Net::Nostr::Event->from_wire($input); 1 };
+  my $ok = eval {
+    if (!ref $input) {
+      $input = Overnet::Core::JSON::decode_json($input);
+    }
+    Overnet::Core::Nostr::Event->assert_wire_types($input);
+    $event = Net::Nostr::Event->from_wire($input);
+    1;
+  };
   my $error = $EVAL_ERROR;
   if (!$ok) {
     (my $err = $error) =~ s/\ at\ .+\ line\ \d+.*//smx;
@@ -208,10 +219,7 @@ sub _decode_content {
   my $ok = eval {
     my $text = $event->content;
 
-    # Wire JSON decoders return characters. The UTF-8 JSON decoder below
-    # expects octets; preserve the original event for signature verification.
-    my $bytes = utf8::is_utf8($text) ? encode('utf8', $text, FB_CROAK | LEAVE_SRC) : $text;
-    $content = $JSON->decode($bytes);
+    $content = Overnet::Core::JSON::decode_json($text);
     1;
   };
   if (!$ok || ref $content ne 'HASH') {
@@ -330,7 +338,7 @@ sub _validate_core_delegation_body {
   } elsif ($body->{delegate_pubkey} !~ /\A[0-9a-f]{64}\z/mxs) {
     push @errors, "Core delegation delegate_pubkey must be 64-char lowercase hex";
   }
-  if (defined $body->{expires_at} && (ref $body->{expires_at} || $body->{expires_at} !~ /\A\d+\z/mxs)) {
+  if (exists $body->{expires_at} && !_is_integer($body->{expires_at})) {
     push @errors, "Core delegation expires_at must be an integer timestamp";
   }
   return @errors;
@@ -379,9 +387,11 @@ sub _validate_authority_protocol_origin {
   push @errors, _validate_authority_required_field($body, 'protocol');
   push @errors, _validate_authority_required_field($body, 'origin');
   if (_is_non_empty_string($body->{protocol}) && _is_non_empty_string($body->{origin})) {
-    my $expected_oid = "$body->{protocol}:$body->{origin}";
+    my $expected_oid = 'urn:overnet:adapter-authority:' . join q{:},
+      map { unpack 'H*', encode('utf8', $_, FB_CROAK | LEAVE_SRC) } @{$body}{qw(protocol origin)};
     if (defined $tag_values->{overnet_oid} && $tag_values->{overnet_oid} ne $expected_oid) {
-      push @errors, "Adapter authority record overnet_oid must equal protocol:origin";
+      push @errors,
+        "Adapter authority record overnet_oid must encode its protocol and origin under the reserved authority prefix";
     }
   }
   return @errors;
@@ -428,7 +438,7 @@ sub _validate_authority_window {
   my ($body) = @_;
   my @errors;
   for my $field (qw(not_before not_after)) {
-    if (defined $body->{$field} && (ref $body->{$field} || $body->{$field} !~ /\A\d+\z/mxs)) {
+    if (exists $body->{$field} && !_is_integer($body->{$field})) {
       push @errors, "Adapter authority record $field must be an integer timestamp";
     }
   }
@@ -447,6 +457,18 @@ sub _validate_removal_authorization {
   my @target_crypto_errors = _validate_context_event_crypto($target_event, 'Kind 7801 target event');
   if (@target_crypto_errors) {
     return @target_crypto_errors;
+  }
+  my $target_context = ref($context->{target_context}) eq 'HASH' ? {%{$context->{target_context}}} : {};
+  $target_context->{_depth} = ($context->{_depth} // 0) + 1;
+  my $target_result = validate($target_event->to_hash, $target_context);
+  if (!$target_result->{valid}) {
+    return ('Kind 7801 target event is not a valid Overnet core event: ' . $target_result->{reason});
+  }
+  my ($target_tags) = _tag_info($target_event->tags);
+  for my $field (qw(overnet_ot overnet_oid)) {
+    if (($tag_values->{$field} // q{}) ne ($target_tags->{$field} // q{})) {
+      return ('Kind 7801 target object scope does not match removal object');
+    }
   }
   return _validate_removal_against_target($event, $tag_values, $context, $target_event);
 }
@@ -515,6 +537,7 @@ sub _validate_delegated_removal_context {
     tag_values       => $tag_values,
     target_event     => $target_event,
     delegation_event => $delegation_event,
+    context          => $context,
     errors           => \@errors,
   );
   return @errors;
@@ -551,7 +574,7 @@ sub _validate_delegated_removal {
   }
 
   my $content;
-  my $content_ok = eval { $content = $JSON->decode($delegation_event->content); 1 };
+  my $content_ok = eval { $content = Overnet::Core::JSON::decode_json($delegation_event->content); 1 };
   if ( !$content_ok
     || ref $content ne 'HASH'
     || ref($content->{body}) ne 'HASH') {
@@ -578,6 +601,12 @@ sub _validate_delegated_removal {
     return;
   }
 
+  my $grant_result = validate($delegation_event->to_hash);
+  if (!$grant_result->{valid}) {
+    push @{$errors}, 'Invalid delegation event: ' . $grant_result->{reason};
+    return;
+  }
+
   if ( ($delegation_tags{overnet_ot} // q{}) ne ($tag_values->{overnet_ot} // q{})
     || ($delegation_tags{overnet_oid} // q{}) ne ($tag_values->{overnet_oid} // q{})) {
     push @{$errors}, "Delegation object scope does not match removal object";
@@ -600,9 +629,31 @@ sub _validate_delegated_removal {
     return;
   }
 
-  if (defined $body->{expires_at}
-    && $body->{expires_at} < $event->created_at) {
-    push @{$errors}, "Delegation is expired at removal event timestamp";
+  _validate_removal_expiry($body, $event, $args{context}, $errors);
+  return;
+}
+
+sub _validate_removal_expiry {
+  my ($body, $event, $context, $errors) = @_;
+  if (exists $body->{expires_at}) {
+    my $expires = $body->{expires_at};
+    if ($event->created_at >= $expires) {
+      push @{$errors}, "Delegation is expired at removal event timestamp";
+      return;
+    }
+    my $acceptance = $context->{trusted_acceptance};
+    if ( ref($acceptance) eq 'HASH'
+      && ($acceptance->{event_id} // q{}) eq $event->id
+      && defined $acceptance->{accepted_at}
+      && !ref $acceptance->{accepted_at}
+      && $acceptance->{accepted_at} =~ /\A\d+\z/mxs
+      && $acceptance->{accepted_at} < $expires) {
+      return;
+    }
+    my $now = exists $context->{now} ? $context->{now} : time;
+    if (!defined $now || ref $now || $now !~ /\A\d+\z/mxs || $now >= $expires) {
+      push @{$errors}, 'Delegation is expired or the receiver clock is unavailable';
+    }
   }
   return;
 }
@@ -639,6 +690,15 @@ sub _is_non_empty_string {
   }
 
   return length($value) ? 1 : 0;
+}
+
+sub _is_integer {
+  my ($value) = @_;
+  return
+       defined $value
+    && !ref $value
+    && (B::svref_2object(\$value)->FLAGS & (B::SVp_IOK() | B::SVp_NOK()))
+    && $value =~ /\A\d+\z/mxs;
 }
 
 sub _is_string_array {
@@ -678,7 +738,18 @@ This module is part of the Overnet Perl implementation.
 
 =head2 validate
 
-Public API entry point.
+Validates a signed event and its authorization context. C<target_event> and
+C<delegation_event> supply referenced records. When the target is itself a
+removal, C<target_context> recursively supplies its authorization evidence.
+
+Expiring grants require receiver time strictly before expiry. C<now> may be
+supplied by a trusted clock (including deterministic tests); absent C<now>
+uses the system clock, while explicit undef fails closed. Historical
+verification accepts C<trusted_acceptance>, an object with C<event_id> and
+C<accepted_at>, only for that exact ID admitted before expiry. The caller must
+obtain this evidence from its own trusted acceptance history, never from the
+event or an unauthenticated peer, retain the grant, and suppress replay side
+effects. These context fields are local verifier inputs, not wire fields.
 
 =head1 DIAGNOSTICS
 

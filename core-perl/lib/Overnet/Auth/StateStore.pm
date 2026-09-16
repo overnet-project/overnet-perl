@@ -5,9 +5,13 @@ use Moo;
 use Carp    qw(croak);
 use English qw(-no_match_vars);
 
+use Fcntl          qw(O_CREAT O_EXCL O_WRONLY);
+use IO::Handle     ();
 use File::Basename qw(dirname);
 use File::Path     qw(make_path);
 use JSON           ();
+
+use Overnet::Core::JSON ();
 
 our $VERSION = '0.001';
 
@@ -53,7 +57,7 @@ sub load_state {
   close $fh
     or croak "close $path failed: $OS_ERROR";
 
-  my $decoded = eval { JSON->new->utf8->decode($json) };
+  my $decoded = eval { Overnet::Core::JSON::decode_json($json) };
   if (!(defined $decoded)) {
     croak "auth state file $path is not valid JSON: $EVAL_ERROR";
   }
@@ -69,20 +73,31 @@ sub save_state {
   my $tmp    = $path . '.tmp.' . $PROCESS_ID;
 
   if (!(-d $parent)) {
-    make_path($parent);
+    make_path($parent, {mode => oct('0700')});
   }
 
   my $json = $STATE_JSON->encode($state);
 
-  open my $fh, '>', $tmp
+  sysopen my $fh, $tmp, O_CREAT | O_EXCL | O_WRONLY, oct('0600')
     or croak "open $tmp failed: $OS_ERROR";
-  print {$fh} $json
-    or croak "write $tmp failed: $OS_ERROR";
-  close $fh
-    or croak "close $tmp failed: $OS_ERROR";
-
-  rename $tmp, $path
-    or croak "rename $tmp to $path failed: $OS_ERROR";
+  my $ok = eval {
+    print {$fh} $json or croak "write $tmp failed: $OS_ERROR";
+    $fh->sync         or croak "sync $tmp failed: $OS_ERROR";
+    close $fh         or croak "close $tmp failed: $OS_ERROR";
+    rename $tmp, $path or croak "rename $tmp to $path failed: $OS_ERROR";
+    open my $dir, '<', $parent or croak "open state directory failed: $OS_ERROR";
+    $dir->sync or croak "sync state directory failed: $OS_ERROR";
+    close $dir or croak "close state directory failed: $OS_ERROR";
+    1;
+  };
+  if (!$ok) {
+    my $error = $EVAL_ERROR;
+    if (defined fileno $fh) {
+      close $fh or $error .= "; cleanup close failed: $OS_ERROR";
+    }
+    unlink $tmp;
+    croak $error;
+  }
 
   return 1;
 }

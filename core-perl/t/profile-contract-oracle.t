@@ -468,7 +468,7 @@ sub _spec_root {
     File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'spec'),
   ) {
     my $abs = File::Spec->rel2abs($dir);
-    return $abs if -d $abs;
+    return $abs if -f File::Spec->catfile($abs, 'docs', 'core.md');
   }
 
   return File::Spec->rel2abs(File::Spec->catdir($FindBin::Bin, '..', '..', 'spec'));

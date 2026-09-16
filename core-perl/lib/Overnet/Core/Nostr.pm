@@ -11,11 +11,12 @@ use JSON               ();
 use List::Util         qw(any);
 use Net::Nostr::Bech32 qw(decode_nsec);
 use Net::Nostr::DirectMessage;
-use Net::Nostr::Client;
+use Overnet::Core::Nostr::Client;
 use Net::Nostr::Event;
 use Net::Nostr::Filter;
 use Net::Nostr::Key;
 use Overnet::Core::Nostr::Event;
+use Overnet::Core::JSON ();
 use Overnet::Core::Nostr::Key;
 
 our $VERSION = '0.001';
@@ -52,7 +53,13 @@ sub generate_key {
 
 sub event_from_wire {
   my ($class, $input) = @_;
-  my $event = eval { Net::Nostr::Event->from_wire($input) };
+  my $event = eval {
+    if (!ref $input) {
+      $input = Overnet::Core::JSON::decode_json($input);
+    }
+    Overnet::Core::Nostr::Event->assert_wire_types($input);
+    Net::Nostr::Event->from_wire($input);
+  };
   if (!($event)) {
     return;
   }
@@ -75,19 +82,23 @@ sub wrap_private_message {
     croak "recipient_pubkeys must contain non-empty strings\n";
   }
 
+  if (@{$recipient_pubkeys} != 1 || $recipient_pubkeys->[0] !~ /\A[0-9a-f]{64}\z/mxs) {
+    croak "private messages require exactly one recipient pubkey\n";
+  }
   my $rumor = Net::Nostr::DirectMessage->create(
     sender_pubkey => $sender_key->{key}->pubkey_hex,
     content       => $JSON->encode($payload),
     recipients    => [@{$recipient_pubkeys}],
   );
-  my ($wrap) = Net::Nostr::DirectMessage->wrap_for_recipients(
+  my ($wrap, $self_wrap) = Net::Nostr::DirectMessage->wrap_for_recipients(
     rumor       => $rumor,
     sender_key  => $sender_key->{key},
     skip_sender => $args{skip_sender} ? 1 : 0,
   );
 
   return {
-    transport       => Overnet::Core::Nostr::Event->new(event => $wrap),
+    transport => Overnet::Core::Nostr::Event->new(event => $wrap),
+    ($self_wrap ? (self_transport => Overnet::Core::Nostr::Event->new(event => $self_wrap)) : ()),
     decrypted_rumor => Overnet::Core::Nostr::Event->new(event => $rumor),
   };
 }
@@ -144,7 +155,7 @@ sub publish_event {
     croak "timeout_ms must be a positive integer\n";
   }
 
-  my $client = Net::Nostr::Client->new;
+  my $client = Overnet::Core::Nostr::Client->new;
   my $cv     = AnyEvent->condvar;
   my $done   = 0;
   my $timer  = AnyEvent->timer(
@@ -209,7 +220,7 @@ sub query_events {
 
   my @filters = map { ref eq 'Net::Nostr::Filter' ? $_ : Net::Nostr::Filter->new(%{$_}) } @{$filters};
 
-  my $client = Net::Nostr::Client->new;
+  my $client = Overnet::Core::Nostr::Client->new;
   my $state  = _query_state(
     relay_url  => $relay_url,
     timeout_ms => $timeout_ms,
@@ -300,6 +311,7 @@ sub _coerce_signed_event {
     croak "event must be an object\n";
   }
 
+  Overnet::Core::Nostr::Event->assert_wire_types($input);
   my $event = Net::Nostr::Event->from_wire($input);
   return Overnet::Core::Nostr::Event->new(event => $event);
 }

@@ -286,4 +286,16 @@ subtest 'guard operators are pinned against boolean mutation' => sub {
     0, 'non-array tag entries are tolerated rather than dereferenced';
 };
 
+subtest 'group IDs encode UTF-8, and reject noncanonical encodings' => sub {
+  my $channel = "#\x{e9}";
+  my $id = Overnet::Authority::HostedChannel::authoritative_group_id(network => 'local', channel => $channel);
+  is $id, 'irc-6c6f63616c-23c3a9', 'UTF-8 bytes, not codepoints';
+  is Overnet::Authority::HostedChannel::channel_name_from_group_id(network => 'local', group_id => $id),
+    $channel, 'UTF-8 decoded back to characters';
+  for my $bad ('irc-61-236', 'irc-61-23ff', 'irc-61-2341') {
+    is Overnet::Authority::HostedChannel::channel_name_from_group_id(network => 'a', group_id => $bad),
+      undef, 'reject odd hex, invalid UTF-8, or unfolded channel';
+  }
+};
+
 done_testing;

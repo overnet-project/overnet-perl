@@ -2,7 +2,8 @@ package Overnet::Adapter::IRC::Presence;
 
 use strictures 2;
 use Moo;
-use JSON ();
+use JSON                              ();
+use Overnet::Authority::HostedChannel ();
 use Overnet::Adapter::IRC::Role::Validation;
 
 our $VERSION = '0.001';
@@ -162,11 +163,12 @@ sub _apply_presence_join_event {
   if (defined $target_error) {
     return (undef, $target_error);
   }
-  if ($context->{target} ne $target) {
+  if (Overnet::Authority::HostedChannel::irc_casefold($context->{target}) ne
+    Overnet::Authority::HostedChannel::irc_casefold($target)) {
     return;
   }
 
-  $members->{$context->{nick}} = {
+  $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{nick})} = {
     nick => $context->{nick},
     %{$context->{irc_identity}},
     last_event_type => 'chat.join',
@@ -182,11 +184,12 @@ sub _apply_presence_part_event {
   if (defined $target_error) {
     return (undef, $target_error);
   }
-  if ($context->{target} ne $target) {
+  if (Overnet::Authority::HostedChannel::irc_casefold($context->{target}) ne
+    Overnet::Authority::HostedChannel::irc_casefold($target)) {
     return;
   }
 
-  delete $members->{$context->{nick}};
+  delete $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{nick})};
   return ($context->{created_at}, undef);
 }
 
@@ -200,11 +203,12 @@ sub _apply_presence_kick_event {
   if (!_non_empty_scalar($context->{target_nick})) {
     return (undef, 'KICK target_nick is required');
   }
-  if ($context->{target} ne $target) {
+  if (Overnet::Authority::HostedChannel::irc_casefold($context->{target}) ne
+    Overnet::Authority::HostedChannel::irc_casefold($target)) {
     return;
   }
 
-  delete $members->{$context->{target_nick}};
+  delete $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{target_nick})};
   return ($context->{created_at}, undef);
 }
 
@@ -214,17 +218,17 @@ sub _apply_presence_nick_event {
   if (!_non_empty_scalar($context->{new_nick})) {
     return (undef, 'NICK new_nick is required');
   }
-  if (!exists $members->{$context->{nick}}) {
+  if (!exists $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{nick})}) {
     return;
   }
 
-  my $member = delete $members->{$context->{nick}};
+  my $member = delete $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{nick})};
   $member->{nick} = $context->{new_nick};
   if (keys %{$context->{irc_identity}}) {
     @{$member}{keys %{$context->{irc_identity}}} = values %{$context->{irc_identity}};
   }
   $member->{last_event_type} = 'irc.nick';
-  $members->{$context->{new_nick}} = $member;
+  $members->{Overnet::Authority::HostedChannel::irc_casefold($context->{new_nick})} = $member;
 
   return ($context->{created_at}, undef);
 }
@@ -255,12 +259,12 @@ sub _presence_event_result {
     push @members, \%member;
   }
 
-  my $object_id = "irc:$network:$target";
+  my $object_id = "irc:$network:" . Overnet::Authority::HostedChannel::irc_casefold($target);
 
   return {
     valid => 1,
     event => {
-      kind       => 37_800,
+      kind       => 7_800,
       created_at => $args->{created_at} + 0,
       tags       => [$self->_overnet_tags('irc.channel_presence', 'chat.channel', $object_id)],
       content    => $JSON->encode(

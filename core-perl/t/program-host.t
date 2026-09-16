@@ -141,6 +141,8 @@ subtest 'host surfaces child protocol framing errors' => sub {
 
   like $error, qr/Protocol\ framing\ error:\ non-numeric\ length\ prefix/mx,
     'host reports protocol framing errors from child stdout';
+  is $host->current_state, 'failed', 'broken protocol permanently fails the session';
+  ok $host->has_exited, 'protocol failure terminates and reaps the child';
 };
 
 subtest 'host treats truncated stdout frames as fatal protocol errors on eof' => sub {
@@ -442,6 +444,23 @@ subtest 'host accepts explicit timeouts and pre-start helpers' => sub {
   );
   my $shutdown = $fresh->request_shutdown(timeout_ms => 5_000);
   is($shutdown->{state}, 'shutdown_complete', 'an explicit shutdown timeout is honored');
+};
+
+subtest 'a framing error after readiness revokes live secret handles immediately' => sub {
+  my $host = Overnet::Program::Host->new(
+    command => [$^X, $happy_program], permissions => ['config.read', 'timers.write'],
+    runtime_args => {secrets => {token => 'secret'}}, startup_timeout_ms => 1_000,
+  );
+  $host->start;
+  my $issued = $host->runtime->issue_secret_handle(session_id => $host->instance->instance_id,
+    program_id => 'fixture.host.program', name => 'token');
+  my $protocol = mock 'Overnet::Program::Protocol' => (override => [feed => sub { die "injected malformed frame\n" }]);
+  like dies { $host->pump_until(timeout_ms => 1_000, condition => sub {0}) },
+    qr/injected malformed frame/, 'runtime surfaces the framing failure';
+  is $host->current_state, 'failed', 'failed session cannot resume';
+  ok $host->has_exited, 'running child was terminated';
+  my $released = $host->runtime->revoke_secret_handles_for_session(session_id => $host->instance->instance_id);
+  is $released, 0, 'the outstanding handle was already revoked during failure';
 };
 
 done_testing;

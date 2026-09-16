@@ -102,8 +102,9 @@ sub advance_after_fire_until_after {
   }
 
   $self->advance_after_fire;
-  while ($self->{due_at_ms} <= $now_ms) {
-    $self->{due_at_ms} += $self->{repeat_ms};
+  if ($self->{due_at_ms} <= $now_ms) {
+    my $missed = int(($now_ms - $self->{due_at_ms}) / $self->{repeat_ms}) + 1;
+    $self->{due_at_ms} += $missed * $self->{repeat_ms};
   }
 
   return $self->{due_at_ms};

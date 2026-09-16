@@ -7,6 +7,8 @@ use English qw(-no_match_vars);
 
 use JSON ();
 
+use Overnet::Core::JSON ();
+
 our $VERSION = '0.001';
 
 has config => (is => 'ro', reader => '_raw_config');
@@ -74,7 +76,7 @@ sub load_file {
   close $fh
     or croak "close $path failed: $OS_ERROR";
 
-  my $decoded = eval { JSON->new->utf8->decode($json) };
+  my $decoded = eval { Overnet::Core::JSON::decode_json($json) };
   if (!(defined $decoded)) {
     croak "auth config file $path is not valid JSON: $EVAL_ERROR";
   }

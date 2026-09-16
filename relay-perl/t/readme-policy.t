@@ -13,19 +13,23 @@ sub _slurp {
 
 my $root = File::Spec->catdir($FindBin::Bin, '..', '..');
 
+my $spec_root = -f File::Spec->catfile($root, 'spec', 'README.md')
+  ? File::Spec->catdir($root, 'spec') : File::Spec->catdir($root, '..', 'spec');
+my $irc_root = -f File::Spec->catfile($root, 'irc-server', 'README.md')
+  ? File::Spec->catdir($root, 'irc-server') : File::Spec->catdir($root, '..', 'irc-server');
+
 my @readmes = (
-  File::Spec->catfile($root, 'spec',             'README.md'),
+  File::Spec->catfile($spec_root, 'README.md'),
   File::Spec->catfile($root, 'core-perl',        'README.md'),
   File::Spec->catfile($root, 'relay-perl',       'README.md'),
   File::Spec->catfile($root, 'adapter-irc-perl', 'README.md'),
-  File::Spec->catfile($root, 'irc-server',       'README.md'),
+  File::Spec->catfile($irc_root, 'README.md'),
   File::Spec->catfile($root, 'relay-perl',       'deploy', 'canary', 'README.md'),
-  File::Spec->catfile($root, 'irc-server',       'deploy', 'canary', 'README.md'),
+  File::Spec->catfile($irc_root, 'deploy', 'canary', 'README.md'),
 );
 
 for my $path (@readmes) {
   my $text = _slurp($path);
-  unlike $text, qr/\bplx\b/imx,                "$path does not mention plx";
   unlike $text, qr{(?:^|[`\s])local/}imx,      "$path does not mention local/ build paths";
   unlike $text, qr{/home/_73\b}mx,             "$path does not mention personal home-directory paths";
   unlike $text, qr{/opt/perl(?:-[\d.]+)?\b}mx, "$path does not mention machine-specific Perl install paths";

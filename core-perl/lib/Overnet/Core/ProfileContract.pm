@@ -5,11 +5,11 @@ use English qw(-no_match_vars);
 use B       qw(SVp_IOK SVp_NOK SVp_POK svref_2object);
 use JSON    ();
 use JSON::Schema::Modern;
-use Scalar::Util qw(blessed);
+use Scalar::Util        qw(blessed);
+use Overnet::Core::JSON ();
 
 our $VERSION = '0.001';
 
-my $JSON        = JSON->new->utf8;
 my $JSON_SCHEMA = JSON::Schema::Modern->new(
   specification_version => 'draft2020-12',
   output_format         => 'flag',
@@ -228,6 +228,19 @@ sub validate_contract_set {
   }
 
   if (!@errors) {
+    my %definitions;
+    for my $contract (@{$contracts}) {
+      for my $kind (qw(object_types event_types)) {
+        for my $name (keys %{$contract->{$kind}}) {
+          if ($definitions{$kind}{$name}++) {
+            push @errors, "profile_contract_set.duplicate_$kind";
+          }
+        }
+      }
+    }
+  }
+
+  if (!@errors) {
     for my $profile_contract (@{$contracts}) {
       _validate_contract_dependencies_in_set($profile_contract, \%by_profile, \@errors);
     }
@@ -291,6 +304,13 @@ sub validate_profile_event {
     content    => $content,
     event_type => $event_type,
   );
+  for my $candidate_contract (@contracts) {
+    my $object = $candidate_contract->{object_types}{$event_type->{object_type}};
+    next if !defined $object || !defined $object->{id}{pattern};
+    if (!_json_schema_valid($tag_values->{overnet_oid}, {type => 'string', pattern => $object->{id}{pattern}})) {
+      push @errors, 'profile_event.object_id_pattern_mismatch';
+    }
+  }
 
   return _result(
     errors     => \@errors,
@@ -379,21 +399,24 @@ sub _validate_profile_event_required_references {
   my (%args) = @_;
   my @errors;
   for my $reference (@{$args{event_type}{references} || []}) {
-    if (!(_profile_event_reference_missing($reference, $args{tag_counts}))) {
-      next;
+    my $tag = $reference->{tag};
+    next if !defined $tag;
+    my $count = $args{tag_counts}{$tag} // 0;
+    if ($reference->{required} && !$count) {
+      push @errors, 'profile_event.required_reference_tag_missing';
     }
-    push @errors, 'profile_event.required_reference_tag_missing';
+    if ($count > 1) {
+      push @errors, 'profile_event.invalid_reference';
+    }
+    if ($count) {
+      my $value = $args{tag_values}{$tag};
+      if (!_is_non_empty_string($value)
+        || (defined $reference->{target_event_type} && $value !~ /\A[0-9a-f]{64}\z/mxs)) {
+        push @errors, 'profile_event.invalid_reference';
+      }
+    }
   }
   return @errors;
-}
-
-sub _profile_event_reference_missing {
-  my ($reference, $tag_counts) = @_;
-  if (!(ref($reference) eq 'HASH' && $reference->{required})) {
-    return 0;
-  }
-  my $tag = $reference->{tag};
-  return defined $tag && !$tag_counts->{$tag} ? 1 : 0;
 }
 
 sub _validate_capabilities {
@@ -710,8 +733,16 @@ sub _validate_references {
     return push @{$errors}, 'profile_contract.invalid_references';
   }
 
+  my (%names, %tags);
   for my $reference (@{$references}) {
     _validate_reference($profile_contract, $reference, $errors);
+    next if ref($reference) ne 'HASH';
+    if (_is_non_empty_string($reference->{name}) && $names{$reference->{name}}++) {
+      push @{$errors}, 'profile_contract.duplicate_reference_name';
+    }
+    if (_is_tag_name($reference->{tag}) && $tags{$reference->{tag}}++) {
+      push @{$errors}, 'profile_contract.duplicate_reference_tag';
+    }
   }
   return;
 }
@@ -921,7 +952,7 @@ sub _event_tags {
 
 sub _event_body {
   my ($content) = @_;
-  my $decoded = eval { $JSON->decode($content) };
+  my $decoded = eval { Overnet::Core::JSON::decode_json($content) };
   if ($EVAL_ERROR || ref($decoded) ne 'HASH') {
     return;
   }

@@ -293,7 +293,7 @@ subtest 'one-shot negentropy sync pulls a missing Overnet event into a second li
     my $response = _http_request(
       port    => $relay_b_port,
       request => join("\r\n",
-        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Async%3A%23overnet HTTP/1.1',
+        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Async%3A%23overnet&author=' . $event->pubkey . ' HTTP/1.1',
         'Host: 127.0.0.1',
         'Accept: application/json',
         'Connection: close',

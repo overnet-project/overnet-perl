@@ -586,6 +586,46 @@ subtest 'event selection and wire decoding edge paths' => sub {
   ok !Overnet::Core::ProfileContract::_is_json_number([]),    'references are not JSON numbers';
 };
 
+subtest 'audit reference cardinality and shape scenarios' => sub {
+  my $fixture = _load_fixture(File::Spec->catfile($spec_dir, 'fixtures', 'audit', '12-profile-references.json'));
+  my %expected = map { $_->{id} => $_->{profile_valid} } @{$fixture->{expected}{cases}};
+  for my $case (@{$fixture->{input}{cases}}) {
+    my $contract = _schema_contract();
+    my $ref = $case->{reference};
+    $contract->{event_types}{'schema.test.event'}{references} = [_reference(
+      required => $ref->{required}, tag => $ref->{tag},
+      target_event_type => defined $ref->{target_event_type} ? 'schema.test.event' : undef,
+      target_object_type => defined $ref->{target_object_type} ? 'schema.test.object' : undef,
+    )];
+    my $event = _event_for_body({});
+    push @{$event->{tags}}, @{$case->{tags}};
+    my $result = Overnet::Core::ProfileContract::validate_profile_event(contract => $contract, event => $event);
+    is !!$result->{valid}, !!$expected{$case->{id}}, $case->{id};
+  }
+  for my $refs (
+    [_reference(), _reference(tag => 'other')],
+    [_reference(), _reference(name => 'other')],
+  ) {
+    my $contract = _schema_contract();
+    $contract->{event_types}{'schema.test.event'}{references} = $refs;
+    ok !Overnet::Core::ProfileContract::validate_contract($contract)->{valid},
+      'reference names and tag assignments are unique';
+  }
+};
+
+subtest 'selected contracts enforce object identifier patterns' => sub {
+  my $contract = _schema_contract();
+  $contract->{object_types}{'schema.test.object'}{id}{pattern} = '^object-[0-9]+$';
+  my $event = _event_for_body({});
+  ok Overnet::Core::ProfileContract::validate_profile_event(contract => $contract, event => $event)->{valid},
+    'matching object identifier accepted';
+  for my $tag (@{$event->{tags}}) {
+    $tag->[1] = 'wrong' if $tag->[0] eq 'overnet_oid' || $tag->[0] eq 'd';
+  }
+  ok !Overnet::Core::ProfileContract::validate_profile_event(contract => $contract, event => $event)->{valid},
+    'nonmatching object identifier rejected';
+};
+
 done_testing;
 
 
@@ -595,7 +635,7 @@ sub _spec_root {
     File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'spec'),
   ) {
     my $abs = File::Spec->rel2abs($dir);
-    return $abs if -d $abs;
+    return $abs if -f File::Spec->catfile($abs, 'docs', 'core.md');
   }
 
   return File::Spec->rel2abs(File::Spec->catdir($FindBin::Bin, '..', '..', 'spec'));

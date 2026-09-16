@@ -1,6 +1,8 @@
 .gitignore
 bin/overnet-auth.pl
 bin/overnet-auth-agent.pl
+bin/overnet-auth-native.pl
+deploy/native-messaging/install-firefox.pl
 lib/Overnet.pm
 lib/Overnet/Auth/Agent.pm
 lib/Overnet/Auth/Backend.pm
@@ -12,6 +14,7 @@ lib/Overnet/Auth/CLI.pm
 lib/Overnet/Auth/Config.pm
 lib/Overnet/Auth/Daemon.pm
 lib/Overnet/Auth/Exchange.pm
+lib/Overnet/Auth/NativeMessaging.pm
 lib/Overnet/Auth/Server.pm
 lib/Overnet/Auth/StateStore.pm
 lib/Overnet/Authority/Delegation.pm
@@ -60,6 +63,7 @@ t/auth-config.t
 t/auth-daemon-cli.t
 t/auth-daemon.t
 t/auth-exchange.t
+t/auth-native-messaging.t
 t/auth-readme.t
 t/auth-socket-io.t
 t/auth-state-store.t
@@ -151,3 +155,11 @@ t/spec-conformance-irc-adapter.t
 t/spec-conformance-irc-server.t
 t/spec-conformance-unit.t
 t/validator.t
+lib/Overnet/Core/JSON.pm
+t/core-audit.t
+t/auth-audit.t
+lib/Overnet/Core/Nostr/Client.pm
+lib/Overnet/Core/Nostr/Connection.pm
+t/authority-order-audit.t
+t/nostr-wire-audit.t
+lib/Overnet/Auth/SocketIO.pm

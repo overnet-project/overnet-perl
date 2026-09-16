@@ -192,7 +192,7 @@ subtest 'IRC source bindings' => sub {
 
   my $wrong_object = _copy($valid);
   $wrong_object->{transport}{decrypted_rumor}{content}{object_id} = 'irc:local:dm:Carol';
-  _first_error_like($wrong_object, qr/object_id\ must\ be\ irc:local:dm:Bob/,
+  _first_error_like($wrong_object, qr/object_id\ must\ be\ irc:local:dm:bob/,
     'a mismatched binding object id');
 
   my $wrong_provenance = _copy($valid);
@@ -266,6 +266,20 @@ subtest 'opaque metadata and provenance validation' => sub {
     'a payload with an unknown provenance type');
 };
 
+subtest 'strict JSON and one valid recipient' => sub {
+  my $input = _load_valid_input('valid-private-dm-message-nip17.json');
+  my $payload = $input->{transport}{decrypted_rumor}{content};
+  my $json = JSON::encode_json($payload);
+  $json =~ s/\A\{/{"body":{},/;
+  $input->{transport}{decrypted_rumor}{content} = $json;
+  ok !Overnet::Core::PrivateMessaging::validate_transport($input)->{valid}, 'duplicate decrypted members rejected';
+  for my $tags ([['p']], [['p', 'bad']], [['p', 'b' x 64], ['p']]) {
+    my $case = _load_valid_input('valid-private-dm-message-nip17.json');
+    $case->{transport}{decrypted_rumor}{tags} = $tags;
+    ok !Overnet::Core::PrivateMessaging::validate_transport($case)->{valid}, 'malformed or extra recipient rejected';
+  }
+};
+
 done_testing;
 
 
@@ -276,7 +290,7 @@ sub _spec_root {
     File::Spec->catdir(dirname(__FILE__), '..', '..', '..', 'spec'),
   ) {
     my $abs = File::Spec->rel2abs($dir);
-    return $abs if -d $abs;
+    return $abs if -f File::Spec->catfile($abs, 'docs', 'core.md');
   }
 
   return File::Spec->rel2abs(File::Spec->catdir(dirname(__FILE__), '..', '..', 'spec'),);

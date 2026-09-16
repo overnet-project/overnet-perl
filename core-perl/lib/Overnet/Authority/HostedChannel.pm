@@ -2,6 +2,7 @@ package Overnet::Authority::HostedChannel;
 
 use strictures 2;
 use Scalar::Util qw(blessed);
+use Encode       qw(encode decode FB_CROAK LEAVE_SRC);
 
 use Net::Nostr::Group ();
 
@@ -16,6 +17,126 @@ sub irc_casefold {
   my $folded = $value;
   $folded =~ tr/A-Z[]\\^/a-z{}|~/;
   return $folded;
+}
+
+sub ordered_events {
+  my ($events, %options) = @_;
+  my (%seen, %timestamps);
+  for my $event (@{$events}) {
+    my $item = _order_record($event, \%options) or next;
+    next if $seen{$item->{id}}++;
+    push @{$timestamps{$item->{created_at}}}, $item;
+  }
+  my @ordered;
+  for my $timestamp (sort { $a <=> $b } keys %timestamps) {
+    push @ordered, _order_at_timestamp($timestamps{$timestamp});
+  }
+  return \@ordered;
+}
+
+sub _event_data {
+  my ($event) = @_;
+  return $event          if ref($event) eq 'HASH';
+  return $event->to_hash if blessed($event) && $event->can('to_hash');
+  return;
+}
+
+sub _matches_scalar {
+  my ($value, $pattern) = @_;
+  return defined($value) && !ref($value) && $value =~ $pattern;
+}
+
+sub _order_record {
+  my ($event, $options) = @_;
+  my $data = _event_data($event);
+  return if ref($data) ne 'HASH';
+  return if !_matches_scalar($data->{id}, qr/\A[0-9a-f]{64}\z/mxs);
+  for my $field (qw(kind created_at)) {
+    return if !_matches_scalar($data->{$field}, qr/\A[0-9]+\z/mxs);
+  }
+  return if ref($data->{tags}) ne 'ARRAY';
+  my %tags      = _first_tag_values($data->{tags});
+  my $sequence  = $tags{overnet_sequence};
+  my $authority = $tags{overnet_authority};
+  if ( !_matches_scalar($sequence, qr/\A[1-9][0-9]*\z/mxs)
+    || !_matches_scalar($authority, qr/\A.+\z/mxs)) {
+    $sequence = undef;
+  }
+  my $delegated = _delegated_metadata($data)
+    && !($options->{snapshot_signers} || {})->{$data->{pubkey}};
+  return {
+    event      => $event,
+    id         => $data->{id},
+    created_at => $data->{created_at},
+    phase      => _event_phase($data->{kind}, $delegated),
+    authority  => $authority,
+    sequence   => $sequence
+  };
+}
+
+sub _event_phase {
+  my ($kind, $delegated) = @_;
+  return 0 if $kind == 9_000 || $kind == 9_002 || $kind == 9_009 || $delegated;
+  return 1 if $kind == 9_021;
+  return 2 if $kind == 9_001 || $kind == 9_022;
+  return 3 if $kind >= 39_000 && $kind <= 39_003;
+  return 4;
+}
+
+sub _order_at_timestamp {
+  my ($items) = @_;
+  my @remaining = sort { $a->{phase} <=> $b->{phase} || $a->{id} cmp $b->{id} } @{$items};
+  my @ordered;
+  while (@remaining) {
+    my %first_sequence;
+    for my $item (@remaining) {
+      next if !defined $item->{sequence};
+      my $first = $first_sequence{$item->{authority}};
+      if (!defined($first) || _compare_sequence($item->{sequence}, $first) < 0) {
+        $first_sequence{$item->{authority}} = $item->{sequence};
+      }
+    }
+    for my $index (0 .. $#remaining) {
+      my $item = $remaining[$index];
+      next
+        if defined($item->{sequence})
+        && _compare_sequence($item->{sequence}, $first_sequence{$item->{authority}}) != 0;
+      push @ordered, $item->{event};
+      splice @remaining, $index, 1;
+      last;
+    }
+  }
+  return @ordered;
+}
+
+sub _compare_sequence {
+  my ($earlier_sequence, $later_sequence) = @_;
+  return length($earlier_sequence) <=> length($later_sequence) || $earlier_sequence cmp $later_sequence;
+}
+
+sub trusted_snapshot {
+  my ($event, $snapshot_pubkeys) = @_;
+  my $data = _event_data($event);
+  return 0 if ref($data) ne 'HASH' || !_matches_scalar($data->{kind}, qr/\A[0-9]+\z/mxs);
+  return 0 if defined($snapshot_pubkeys) && ref($snapshot_pubkeys) ne 'ARRAY';
+  return 1 if $data->{kind} < 39_000    || $data->{kind} > 39_003;
+  return 0 if !defined($data->{pubkey}) || ref($data->{pubkey});
+  for my $pubkey (@{$snapshot_pubkeys || []}) {
+    return 1 if defined($pubkey) && !ref($pubkey) && $pubkey eq $data->{pubkey};
+  }
+  return _delegated_metadata($data);
+}
+
+sub _delegated_metadata {
+  my ($data) = @_;
+  return 0 if $data->{kind} != 39_000 || ref($data->{tags}) ne 'ARRAY';
+  return 0 if !_matches_scalar($data->{pubkey}, qr/\A[0-9a-f]{64}\z/mxs);
+  my %tags = _first_tag_values($data->{tags});
+  for my $name (qw(overnet_actor overnet_authority)) {
+    return 0 if !_matches_scalar($tags{$name}, qr/\A[0-9a-f]{64}\z/mxs);
+  }
+  return 0 if $tags{overnet_actor} eq $data->{pubkey};
+  return _matches_scalar($tags{overnet_sequence}, qr/\A[1-9][0-9]*\z/mxs) ? 1 : 0;
 }
 
 sub irc_user_mask {
@@ -70,7 +191,13 @@ sub authoritative_group_id {
     return;
   }
 
-  my $group_id = join(q{-}, q{irc}, unpack(q{H*}, $network), unpack(q{H*}, $folded_channel),);
+  my $group_id = eval {
+    join(q{-},
+      q{irc},
+      unpack(q{H*}, encode('UTF-8', $network,        FB_CROAK | LEAVE_SRC)),
+      unpack(q{H*}, encode('UTF-8', $folded_channel, FB_CROAK | LEAVE_SRC)));
+  };
+  return if !defined $group_id;
   return Net::Nostr::Group->validate_group_id($group_id)
     ? $group_id
     : undef;
@@ -87,17 +214,19 @@ sub channel_name_from_group_id {
   if (!(defined $group_id && !ref($group_id) && length($group_id))) {
     return;
   }
-  my ($network_hex, $channel_hex) = $group_id =~ /\Airc-([0-9a-f]+)-([0-9a-f]+)\z/mxs;
+  my ($network_hex, $channel_hex) = $group_id =~ /\Airc-((?:[0-9a-f]{2})+)-((?:[0-9a-f]{2})+)\z/mxs;
   if (!(defined $network_hex && defined $channel_hex)) {
     return;
   }
 
-  my $decoded_network = pack('H*', $network_hex);
+  my $decoded_network = eval { decode('UTF-8', pack('H*', $network_hex), FB_CROAK) };
+  return if !defined $decoded_network;
   if (!($decoded_network eq $network)) {
     return;
   }
 
-  my $channel = pack('H*', $channel_hex);
+  my $channel = eval { decode('UTF-8', pack('H*', $channel_hex), FB_CROAK) };
+  return if !defined $channel || irc_casefold($channel) ne $channel;
   if (!(_is_channel_name($channel))) {
     return;
   }
@@ -208,7 +337,7 @@ sub group_event_is_tombstoned {
   }
 
   for my $tag (@{$tags}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     if ( ($tag->[0] || q{}) eq 'status'
@@ -240,7 +369,7 @@ sub _first_tag_values {
   my %values;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     if (exists $values{$tag->[0]}) {
@@ -285,6 +414,22 @@ This module is part of the Overnet Perl implementation.
 =head2 irc_casefold
 
 Public API entry point.
+
+=head2 ordered_events
+
+Returns accepted authoritative events in the deterministic order defined by IRC
+section 11.4, collapsing duplicate IDs. Inputs may be event hashes or Nostr
+event objects. The caller must authenticate and authorize history before using
+it; sorting does not establish trust. C<snapshot_signers> identifies configured
+relay snapshot keys when distinguishing delegated metadata from snapshots.
+
+=head2 trusted_snapshot
+
+Filters already accepted history under IRC section 11.4. Snapshot events need
+an explicitly configured signer, except delegated kind 39000 metadata with the
+required actor, grant and sequence tags. Ordinary control events pass through.
+The caller remains responsible for signature and admission verification; this
+helper does not authorize new writes.
 
 =head2 irc_user_mask
 

@@ -893,6 +893,20 @@ sub accept_emitted_private_message {
   my $validation = Overnet::Core::PrivateMessaging::validate_transport($candidate);
   my @errors     = @{$validation->{errors} || []};
 
+  # The semantic validator also serves unsigned specification examples. The
+  # runtime boundary requires an actual verified relay-visible gift wrap.
+  my $visible_transport = _clone_json($candidate->{transport});
+  if (ref($visible_transport) eq 'HASH') {
+    delete $visible_transport->{decrypted_rumor};
+  }
+  my $wrap = Overnet::Core::Nostr->event_from_wire($visible_transport);
+  if (!$wrap || !eval { $wrap->validate; 1 }) {
+    push @errors, 'Private-message transport must be a valid signed Nostr event';
+  }
+  if ($wrap) {
+    push @errors, Overnet::Core::PrivateMessaging::validate_transport_recipients($wrap->to_hash);
+  }
+
   if (@errors || !$validation->{valid}) {
     CORE::die {
       code    => 'runtime.validation_failed',
@@ -905,10 +919,6 @@ sub accept_emitted_private_message {
     };
   }
 
-  my $visible_transport = _clone_json($candidate->{transport});
-  if (ref($visible_transport) eq 'HASH') {
-    delete $visible_transport->{decrypted_rumor};
-  }
   my $stored = {
     transport    => $visible_transport,
     private_type => $validation->{private_type},
@@ -1158,7 +1168,10 @@ sub _event_from_wire {
 
   my $event;
   eval {
-    $event = Net::Nostr::Event->from_wire($input);
+    $event = do {
+      Overnet::Core::Nostr::Event->assert_wire_types($input);
+      Net::Nostr::Event->from_wire($input);
+    };
     1;
   } or return;
 

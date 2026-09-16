@@ -15,7 +15,7 @@ WriteMakefile(
   VERSION_FROM       => 'lib/Overnet.pm',
   LICENSE            => 'gpl_3',
   MIN_PERL_VERSION   => '5.040',
-  EXE_FILES          => ['bin/overnet-auth.pl', 'bin/overnet-auth-agent.pl',],
+  EXE_FILES          => ['bin/overnet-auth.pl', 'bin/overnet-auth-agent.pl', 'bin/overnet-auth-native.pl',],
   CONFIGURE_REQUIRES => {
     'ExtUtils::MakeMaker' => 0,
   },
@@ -45,6 +45,7 @@ WriteMakefile(
         t/auth-daemon-cli.t
         t/auth-daemon.t
         t/auth-exchange.t
+        t/auth-native-messaging.t
         t/auth-readme.t
         t/auth-socket-io.t
         t/auth-state-store.t

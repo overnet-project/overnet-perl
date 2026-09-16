@@ -1,8 +1,8 @@
 {
-   "description" : "An adapter authority record whose overnet_oid does not equal protocol:origin is invalid.",
+   "description" : "An adapter authority record whose overnet_oid does not encode its protocol and origin under the reserved authority prefix is invalid.",
    "expected" : {
       "overnet_valid" : false,
-      "reason" : "Adapter authority record overnet_oid must equal protocol:origin"
+      "reason" : "Adapter authority record overnet_oid must encode its protocol and origin under the reserved authority prefix"
    },
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"pubkeys\":[\"a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2\"]}}",
@@ -14,7 +14,7 @@
       "tags" : [
          [
             "d",
-            "irc:wrong.network"
+            "urn:overnet:adapter-authority:697263:77726f6e672e6e6574776f726b"
          ],
          [
             "overnet_v",
@@ -30,7 +30,7 @@
          ],
          [
             "overnet_oid",
-            "irc:wrong.network"
+            "urn:overnet:adapter-authority:697263:77726f6e672e6e6574776f726b"
          ],
          [
             "v",

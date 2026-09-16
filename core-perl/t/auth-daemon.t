@@ -188,7 +188,7 @@ subtest 'daemon loads mutable state from the configured state file' => sub {
   my $response = $client->sessions_authorize(
     program_id  => 'irc.bridge',
     identity_id => 'default',
-    interactive => 0,
+    interactive => JSON::false,
     service     => {
       locators => ['irc://irc.example.test/overnet'],
     },
@@ -225,6 +225,7 @@ subtest 'daemon persists mutable session and service-pin state to the configured
     with_policies => 0,
     unattended    => 1,
   );
+  _write_state($state_file, {policies => [], service_pins => {}, sessions => []});
   my ($pid, $client) = _start_daemon(
     config_file     => $config_file,
     max_connections => 1,
@@ -310,6 +311,7 @@ subtest 'constructor validation and defaults' => sub {
       endpoint    => '/tmp/x.sock',
       socket_mode => oct('0644'),
       state_file  => '/tmp/state.json',
+      agent => Overnet::Auth::Agent->new,
     },
   );
   is $daemon->_socket_mode, oct('0644'), 'an explicit socket mode is honored';
@@ -320,7 +322,7 @@ subtest 'constructor validation and defaults' => sub {
   is $default_mode->_state_store, undef, 'no state store is built without a state file';
 
   my $store  = Overnet::Auth::StateStore->new(path => '/tmp/injected-state.json');
-  my $reused = Overnet::Auth::Daemon->new(endpoint => '/tmp/x.sock', state_store => $store);
+  my $reused = Overnet::Auth::Daemon->new(endpoint => '/tmp/x.sock', state_store => $store, agent => Overnet::Auth::Agent->new);
   is $reused->_state_store, exact_ref($store), 'an injected state store is reused';
 };
 
@@ -409,7 +411,7 @@ subtest 'listen socket edge and failure paths' => sub {
   );
 };
 
-subtest 'a dispatch failure tears the daemon down cleanly' => sub {
+subtest 'a dispatch failure closes only the failed connection' => sub {
   my $dir      = tempdir(CLEANUP => 1);
   my $endpoint = File::Spec->catfile($dir, 'crash.sock');
 
@@ -424,6 +426,7 @@ subtest 'a dispatch failure tears the daemon down cleanly' => sub {
   my $daemon = Overnet::Auth::Daemon->new(
     endpoint => $endpoint,
     agent    => t::auth_daemon::CrashingAgent->new,
+    max_connections => 1,
   );
   my $listener = $daemon->_listen_socket;
   my $client = IO::Socket::UNIX->new(Type => SOCK_STREAM, Peer => $endpoint)
@@ -436,12 +439,22 @@ subtest 'a dispatch failure tears the daemon down cleanly' => sub {
     ),
   );
 
-  like(dies { $daemon->run }, qr/agent exploded/, 'dispatch failures propagate from run');
+  ok $daemon->run, 'failed connection is counted without crashing the daemon';
   ok !-S $endpoint, 'the endpoint socket is removed after the failure';
   close $client or die "close failed: $!";
 };
 
-subtest 'empty endpoint and state_file values are treated as unset' => sub {
+subtest 'missing persisted trust and live endpoints fail closed' => sub {
+  my $dir = tempdir(CLEANUP => 1);
+  like dies { Overnet::Auth::Daemon->new(endpoint => "$dir/auth.sock", state_file => "$dir/missing.json") },
+    qr/Configured auth state is missing/, 'lost state cannot reset pins or approvals';
+  my $listener = IO::Socket::UNIX->new(Type => SOCK_STREAM, Local => "$dir/live.sock", Listen => 2);
+  my $daemon = Overnet::Auth::Daemon->new(endpoint => "$dir/live.sock");
+  like dies { $daemon->_listen_socket }, qr/already in use/, 'running daemon is not unlinked';
+  ok -S "$dir/live.sock", 'original endpoint remains present';
+};
+
+subtest 'empty endpoint and state_file values are treated as unset'  => sub {
   like(
     dies { Overnet::Auth::Daemon->new(endpoint => q{}) },
     qr/auth-agent endpoint is required/,
@@ -479,7 +492,8 @@ sub _start_daemon {
   die "fork failed: $!" unless defined $pid;
   if (!$pid) {
     my $listener = t::auth_daemon::FakeListener->new(queue => \@server_sockets);
-    my $daemon   = Overnet::Auth::Daemon->new(%args);
+    my $daemon   = Overnet::Auth::Daemon->new(%args,
+      caller_resolver => sub { +{program_id => 'irc.bridge', admin => 1} });
     $daemon->{listen_factory} = sub { return $listener };
     $daemon->run;
     exit 0;

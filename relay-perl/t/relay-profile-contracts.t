@@ -210,30 +210,15 @@ subtest 'the contract index handles events without a usable event type tag' => s
     'known policy leaves untyped events to core validation';
 };
 
-subtest 'nested profile namespaces may share an event type' => sub {
-  my $index = Overnet::Relay::ProfileContracts->new(
+subtest 'overlapping contract definitions fail at configuration time' => sub {
+  like dies { Overnet::Relay::ProfileContracts->new(
     contracts => [
-      _namespaced_contract('chat',       'chat.extra.thing', 'chat.extra.channel'),
+      _namespaced_contract('chat', 'chat.extra.thing', 'chat.extra.channel'),
       _namespaced_contract('chat.extra', 'chat.extra.thing', 'chat.extra.channel'),
-    ],
-    policy => 'required',
-  );
-
-  is $index->contracts->[0]{profile}, 'chat', 'the contract list round-trips';
-  is $index->metadata->{event_types}, ['chat.extra.thing'],
-    'the shared event type is advertised once';
-
-  my $event = $author->create_event(
-    kind => 7800,
-    tags => _overnet_tags(
-      event_type  => 'chat.extra.thing',
-      object_type => 'chat.extra.channel',
-      object_id   => 'x:1',
-    ),
-    content => $JSON->encode({provenance => {type => 'native'}, body => {text => 'hi'}}),
-  );
-  is $index->validate_event($event), 'profile_event.event_type_ambiguous',
-    'events matching multiple contracts are validated against the full set';
+    ], policy => 'required',
+  ) }, qr/duplicate_object_types/, 'ambiguous object ownership is rejected';
+  like dies { Overnet::Relay::ProfileContracts->new(policy => 'required') },
+    qr/needs at least one contract/, 'required policy cannot silently turn off';
 };
 
 done_testing;

@@ -21,7 +21,7 @@ sub create_auth_event {
   if (!(defined $scope && !ref($scope) && length($scope))) {
     return _invalid('scope is required');
   }
-  if (!(defined $created_at && !ref($created_at))) {
+  if (!_valid_time($created_at)) {
     return _invalid('created_at is required');
   }
 
@@ -158,6 +158,11 @@ sub verify_delegation_grant {
     return _invalid($error);
   }
 
+  my $now = exists $args{now} ? $args{now} : int(time());
+  if (!_valid_time($now) || $now >= $expires_at || $event->created_at >= $expires_at) {
+    return _invalid('delegation grant has expired');
+  }
+
   return {
     valid    => 1,
     pubkey   => $event->pubkey,
@@ -172,6 +177,8 @@ sub verify_delegated_action_grant {
   if (!$grant) {
     return _invalid('delegation grant is required');
   }
+  my $verified = eval { $grant->validate; 1 };
+  return _invalid('delegation grant signature is invalid') if !$verified;
   if ($grant->kind != $args{grant_kind}) {
     return _invalid('delegation grant uses the wrong event kind');
   }
@@ -196,14 +203,38 @@ sub verify_delegated_action_grant {
     !(
          defined $expires_at
       && !ref($expires_at)
-      && $expires_at =~ /\A\d+\z/mxs
-      && $args{event}->created_at <= $expires_at
+      && $expires_at =~ /\A[0-9]+\z/mxs
+      && $args{event}->created_at < $expires_at
     )
   ) {
     return _invalid('delegation grant has expired');
   }
 
-  return {valid => 1, pubkey => $args{actor_pubkey},};
+  my $expiry_error = _delegated_expiry_error($expires_at, %args);
+  return $expiry_error if $expiry_error;
+  return {valid => 1, pubkey => $args{actor_pubkey}};
+}
+
+sub _delegated_expiry_error {
+  my ($expires_at, %args) = @_;
+  my $now = exists $args{now} ? $args{now} : int(time());
+  return _invalid('current time is unavailable') if !_valid_time($now);
+  if ($now >= $expires_at) {
+    my $receipt = $args{trusted_acceptance};
+    if ( ref($receipt) ne 'HASH'
+      || ($receipt->{event_id} || q{}) ne $args{event}->id
+      || !_valid_time($receipt->{accepted_at})
+      || $receipt->{accepted_at} >= $expires_at
+      || $receipt->{accepted_at} > $now) {
+      return _invalid('delegation grant has expired');
+    }
+  }
+  return;
+}
+
+sub _valid_time {
+  my ($value) = @_;
+  return defined($value) && !ref($value) && $value =~ /\A[0-9]+\z/mxs;
 }
 
 sub _validate_grant_creation {
@@ -268,7 +299,7 @@ sub _validate_hex_pubkey {
 
 sub _validate_digits {
   my ($name, $value) = @_;
-  return defined $value && !ref($value) && $value =~ /\A\d+\z/mxs ? undef : "$name is required";
+  return defined $value && !ref($value) && $value =~ /\A[0-9]+\z/mxs ? undef : "$name is required";
 }
 
 sub _validate_positive_integer {
@@ -278,7 +309,7 @@ sub _validate_positive_integer {
 
 sub _validate_created_at {
   my ($created_at) = @_;
-  return defined $created_at && !ref($created_at) ? undef : 'created_at is required';
+  return _valid_time($created_at) ? undef : 'created_at is required';
 }
 
 sub _validate_optional_nick {
@@ -322,7 +353,7 @@ sub _verify_grant_tags {
 
 sub _verify_expiration_tag {
   my ($tag_value, $expires_at) = @_;
-  if (!(defined $tag_value && $tag_value =~ /\A\d+\z/mxs && $tag_value == $expires_at)) {
+  if (!(defined $tag_value && $tag_value =~ /\A[0-9]+\z/mxs && $tag_value == $expires_at)) {
     return 'delegation event expiration does not match';
   }
   return;
@@ -347,7 +378,7 @@ sub _first_tag_values {
   my %values;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     if (exists $values{$tag->[0]}) {
@@ -420,7 +451,12 @@ Arguments are C<grant>, C<event>, C<actor_pubkey>, C<relay_url>, and C<grant_kin
 C<grant> and C<event> must be already signature-validated event objects exposing
 C<kind>, C<pubkey>, C<tags>, and C<created_at>. This method checks authorization
 bindings; it does not revalidate their signatures. The caller retains grant
-lookup, retention, session-lifetime enforcement, and application permissions.
+lookup, retention, and application permissions. Expiry excludes the boundary,
+and live verification checks the receiver clock (optional trusted C<now>).
+Historical verification after expiry requires C<trusted_acceptance> containing
+this exact C<event_id> and an C<accepted_at> before expiry. Such evidence must
+come from local admission history, never request content. Callers suppress
+side effects when an already accepted ID is replayed.
 
 =head1 DIAGNOSTICS
 

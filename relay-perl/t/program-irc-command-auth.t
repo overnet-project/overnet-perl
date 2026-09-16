@@ -1,9 +1,12 @@
 use strictures 2;
 use File::Spec;
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
 use Test2::V0;
 
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib');
+use lib File::Spec->catdir(IRC_SERVER_ROOT, 'lib');
 
 my $module = 'Overnet::Program::IRC::Command::Auth';
 my $path   = $module =~ s{::}{/}gr . '.pm';
@@ -150,7 +153,7 @@ is(
 );
 
 my $dispatcher_path = File::Spec->catfile(
-  $FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Dispatcher.pm',
+  IRC_SERVER_ROOT, 'lib', 'Overnet', 'Program', 'IRC', 'Dispatcher.pm',
 );
 open my $dispatcher_fh, '<', $dispatcher_path
   or die "Unable to read $dispatcher_path: $!";

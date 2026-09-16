@@ -2,7 +2,8 @@ package Overnet::Adapter::IRC::InputMapper;
 
 use strictures 2;
 use Moo;
-use JSON ();
+use JSON                              ();
+use Overnet::Authority::HostedChannel ();
 use Overnet::Adapter::IRC::Role::Validation;
 
 our $VERSION = '0.001';
@@ -185,7 +186,7 @@ sub _map_mode_input {
       kind        => 7_800,
       event_type  => 'irc.mode',
       object_type => 'chat.channel',
-      object_id   => "irc:$args->{network}:$args->{target}",
+      object_id   => "irc:$args->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($args->{target}),
       origin      => "$args->{network}/$args->{target}",
       body        => $body,
     },
@@ -208,7 +209,7 @@ sub _map_topic_input {
       kind        => 37_800,
       event_type  => 'chat.topic',
       object_type => 'chat.channel',
-      object_id   => "irc:$args->{network}:$args->{target}",
+      object_id   => "irc:$args->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($args->{target}),
       origin      => "$args->{network}/$args->{target}",
       body        => {topic => $args->{text},},
     },
@@ -252,7 +253,7 @@ sub _map_membership_input {
       kind        => 7_800,
       event_type  => $event_type_for{$command},
       object_type => 'chat.channel',
-      object_id   => "irc:$args->{network}:$args->{target}",
+      object_id   => "irc:$args->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($args->{target}),
       origin      => "$args->{network}/$args->{target}",
       body        => $body,
     },
@@ -282,7 +283,7 @@ sub _map_channel_message_input {
       kind        => 7_800,
       event_type  => $event_type,
       object_type => 'chat.channel',
-      object_id   => "irc:$args->{network}:$args->{target}",
+      object_id   => "irc:$args->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($args->{target}),
       origin      => "$args->{network}/$args->{target}",
       body        => {text => $args->{text},},
     },
@@ -299,7 +300,7 @@ sub _map_direct_message_input {
       kind        => 7_800,
       event_type  => $event_type,
       object_type => 'chat.dm',
-      object_id   => "irc:$args->{network}:dm:$args->{target}",
+      object_id   => "irc:$args->{network}:dm:" . Overnet::Authority::HostedChannel::irc_casefold($args->{target}),
       origin      => "$args->{network}/$args->{target}",
       body        => {text => $args->{text},},
     },

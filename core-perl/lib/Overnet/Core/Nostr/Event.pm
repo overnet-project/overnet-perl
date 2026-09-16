@@ -2,12 +2,51 @@ package Overnet::Core::Nostr::Event;
 
 use strictures 2;
 use Moo;
+use B      ();
+use Encode qw(encode FB_CROAK LEAVE_SRC);
 
 our $VERSION = '0.001';
 
 has event => (is => 'ro');
 
 no Moo;
+
+sub assert_wire_types {
+  my ($class, $input) = @_;
+  die "Nostr event must be an object\n" if ref($input) ne 'HASH';
+  for my $field (qw(kind created_at)) {
+    die "$field must be an integer\n" if !_wire_integer($input->{$field});
+  }
+  for my $field (qw(id pubkey content sig)) {
+    my $value = $input->{$field};
+    die "$field must be a string\n"
+      if !defined $value
+      || ref $value
+      || !(B::svref_2object(\$value)->FLAGS & B::SVp_POK());
+    encode('utf8', $value, FB_CROAK | LEAVE_SRC);
+  }
+  die "tags must be an array\n" if ref($input->{tags}) ne 'ARRAY';
+  for my $tag (@{$input->{tags}}) {
+    die "tags must contain arrays\n" if ref($tag) ne 'ARRAY';
+    for my $value (@{$tag}) {
+      die "tag values must be strings\n"
+        if !defined $value
+        || ref $value
+        || !(B::svref_2object(\$value)->FLAGS & B::SVp_POK());
+      encode('utf8', $value, FB_CROAK | LEAVE_SRC);
+    }
+  }
+  return;
+}
+
+sub _wire_integer {
+  my ($value) = @_;
+  return
+       defined $value
+    && !ref $value
+    && (B::svref_2object(\$value)->FLAGS & (B::SVp_IOK() | B::SVp_NOK()))
+    && $value =~ /\A[0-9]+\z/mxs;
+}
 
 sub id {
   my ($self) = @_;
@@ -68,6 +107,11 @@ Version 0.001.
 This module wraps a C<Net::Nostr::Event> for the Overnet core API.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 assert_wire_types
+
+Checks scalar types and Unicode in a signed Nostr wire object before coercion.
+Throws for malformed fields; cryptographic verification remains separate.
 
 =head2 id
 

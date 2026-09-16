@@ -1,6 +1,10 @@
 use strictures 2;
 
 use Test2::V0;
+use JSON ();
+{ package t::authority_retention::Connection;
+  sub send { push @{$_[0]{messages}}, $_[1]; }
+}
 
 use Net::Nostr::Key;
 use Overnet::Authority::HostedChannel::Relay qw(build_authoritative_relay);
@@ -27,18 +31,19 @@ my $operator_session_key = Net::Nostr::Key->new;
 
 sub _relay {
   my (%args) = @_;
-  return build_authoritative_relay(relay_url => $RELAY_URL, grant_kind => $GRANT_KIND, %args,);
+  return build_authoritative_relay(clock => sub { $BASE_TIME + 1000 },relay_url => $RELAY_URL, grant_kind => $GRANT_KIND, %args,);
 }
 
 # What the real relay does with an incoming event: authorize it, and store it
 # only if authorization accepted.
 sub _admit {
-  my ($relay,    $event)  = @_;
-  my ($accepted, $reason) = $relay->on_event->($event);
-  if ($accepted) {
-    $relay->store->store($event);
-  }
-  return ($accepted, $reason);
+  my ($relay, $event) = @_;
+  my $connection = bless {messages => []}, 't::authority_retention::Connection';
+  $relay->_connections({test => $connection});
+  $relay->_subscriptions({});
+  $relay->_handle_event('test', $event);
+  my $reply = JSON::decode_json($connection->{messages}[-1]);
+  return ($reply->[2], $reply->[3]);
 }
 
 sub _grant_event {

@@ -257,4 +257,29 @@ subtest 'services accept opaque endpoint-blind private messages without decrypte
     'notification does not include decrypted rumor for opaque messages';
 };
 
+subtest 'runtime verifies the complete transport before storing private output' => sub {
+  my $runtime = Overnet::Program::Runtime->new;
+  for my $tamper (sub { delete $_[0]{transport}{sig} }, sub { $_[0]{transport}{sig} = '0' x 128 },
+      sub { $_[0]{transport}{content} .= 'changed' }) {
+    my $candidate = _private_message_candidate();
+    $tamper->($candidate);
+    my $error = _structured_error { $runtime->accept_emitted_private_message(
+      method => 'overnet.emit_private_message', candidate => $candidate) };
+    is $error->{code}, 'runtime.validation_failed', 'forged or incomplete wrap is rejected';
+  }
+  is_deeply $runtime->emitted_items, [], 'none of the unverified candidates were stored';
+};
+
+subtest 'rumor identity is checked against original content bytes' => sub {
+  my $runtime = Overnet::Program::Runtime->new;
+  my $candidate = _private_message_candidate();
+  my $id = $candidate->{transport}{decrypted_rumor}{id};
+  my $result = $runtime->accept_emitted_private_message(method => 'overnet.emit_private_message', candidate => $candidate);
+  is $result->{rumor_id}, $id, 'non-canonical JSON key ordering does not change the rumor id';
+  $candidate->{transport}{decrypted_rumor}{id} = '0' x 64;
+  my $error = _structured_error { $runtime->accept_emitted_private_message(
+    method => 'overnet.emit_private_message', candidate => $candidate) };
+  is $error->{code}, 'runtime.validation_failed', 'mismatched rumor id is rejected';
+};
+
 done_testing;

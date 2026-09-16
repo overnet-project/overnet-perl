@@ -7,7 +7,7 @@ use AnyEvent;
 use Carp    qw(croak);
 use English qw(-no_match_vars);
 
-use Net::Nostr::Client;
+use Overnet::Core::Nostr::Client;
 use Net::Nostr::Filter;
 use Net::Nostr::Negentropy;
 
@@ -60,7 +60,7 @@ sub _constructor_args_hash {
 sub sync_once {
   my ($self, %args) = @_;
   my $request       = $self->_sync_request(%args);
-  my $remote_client = Net::Nostr::Client->new;
+  my $remote_client = Overnet::Core::Nostr::Client->new;
   my $state         = {
     need              => {},
     fetched           => {},
@@ -290,7 +290,7 @@ sub _build_local_negentropy {
 
 sub _query_local_events_from_url {
   my ($self, %args) = @_;
-  my $client = Net::Nostr::Client->new;
+  my $client = Overnet::Core::Nostr::Client->new;
   my @events;
   my $sub_id = $args{subscription_id} . '-seed';
 
@@ -418,7 +418,7 @@ sub _store_fetched_events_in_relay {
 
 sub _publish_fetched_events_to_url {
   my ($self, %args) = @_;
-  my $client = Net::Nostr::Client->new;
+  my $client = Overnet::Core::Nostr::Client->new;
   my %responses;
   my @pending = grep { $args{fetched_events}{$_} } @{$args{requested_ids}};
   my %pending = map  { $_ => 1 } @pending;

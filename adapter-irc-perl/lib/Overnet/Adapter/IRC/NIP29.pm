@@ -1,6 +1,7 @@
 package Overnet::Adapter::IRC::NIP29;
 
 use strictures 2;
+use List::Util qw(any);
 use Moo;
 use Carp    qw(croak);
 use English qw(-no_match_vars);
@@ -248,6 +249,19 @@ sub _authoritative_channel_context {
     return (undef, $actor_error);
   }
 
+  for my $raw_event (@{$events}) {
+    return (undef, 'authoritative events must be objects') if ref($raw_event) ne 'HASH';
+    my $event = eval { Net::Nostr::Event->new(%{$raw_event}) };
+    return (undef, 'authoritative events must be valid Nostr events') if !$event;
+    my $event_group = _event_hash_group_id($raw_event);
+    return (undef, 'authoritative event group mismatch') if defined($event_group) && $event_group ne $group_id;
+  }
+  my $snapshot_pubkeys = $session_config->{snapshot_pubkeys} || [];
+  return (undef, 'snapshot_pubkeys must be an array of public keys')
+    if ref($snapshot_pubkeys) ne 'ARRAY'
+    || any { !_valid_hex_pubkey($_) } @{$snapshot_pubkeys};
+  $events = [grep { Overnet::Authority::HostedChannel::trusted_snapshot($_, $snapshot_pubkeys) } @{$events}];
+
   my $group_ref = _nip29_group_ref(
     group_id             => $group_id,
     session_config       => $session_config,
@@ -343,20 +357,14 @@ sub _nip29_group_ref_pubkey_from_event {
 }
 
 sub _event_hash_group_id {
-  my ($event) = @_;
-  my $d_tag;
+  my ($event)     = @_;
+  my $kind        = $event->{kind} || 0;
+  my $binding_tag = $kind >= 39_000 && $kind <= 39_003 ? 'd' : 'h';
   for my $tag (@{$event->{tags} || []}) {
-    if (ref($tag) ne 'ARRAY' || @{$tag} < 2) {
-      next;
-    }
-    if (($tag->[0] || q{}) eq 'h') {
-      return $tag->[1];
-    }
-    if (($tag->[0] || q{}) eq 'd') {
-      $d_tag //= $tag->[1];
-    }
+    next             if ref($tag) ne 'ARRAY' || @{$tag} < 2;
+    return $tag->[1] if $tag->[0] eq $binding_tag;
   }
-  return $d_tag;
+  return;
 }
 
 sub _optional_authoritative_actor_error {
@@ -382,16 +390,16 @@ sub _new_join_admission {
     operation         => 'authoritative_join_admission',
     authority_profile => 'nip29',
     object_type       => 'chat.channel',
-    object_id         => "irc:$context->{network}:$context->{target}",
-    group_host        => $context->{group_host},
-    group_id          => $context->{group_id},
-    group_ref         => $context->{group_ref},
-    allowed           => JSON::false,
-    member            => JSON::false,
-    present           => JSON::false,
-    create_channel    => JSON::false,
-    auth_required     => JSON::false,
-    reason            => q{},
+    object_id      => "irc:$context->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($context->{target}),
+    group_host     => $context->{group_host},
+    group_id       => $context->{group_id},
+    group_ref      => $context->{group_ref},
+    allowed        => JSON::false,
+    member         => JSON::false,
+    present        => JSON::false,
+    create_channel => JSON::false,
+    auth_required  => JSON::false,
+    reason         => q{},
   );
 }
 
@@ -849,7 +857,8 @@ sub _authoritative_channel_state_from_events {
   my @sorted_events;
 
   my $sort_ok = eval {
-    @sorted_events = _sorted_authoritative_group_events(@{$context->{authoritative_events}});
+    @sorted_events = _sorted_authoritative_group_events($context->{authoritative_events},
+      snapshot_signers => {map { $_ => 1 } @{$context->{session_config}{snapshot_pubkeys} || []}});
     1;
   };
   if (!$sort_ok) {
@@ -900,7 +909,7 @@ sub _new_authoritative_metadata {
 
 sub _apply_authoritative_channel_event {
   my ($state, $event, $group_id) = @_;
-  my $event_group_id = Net::Nostr::Group->group_id_from_event($event);
+  my $event_group_id = _event_hash_group_id($event->to_hash);
   my %handler_for    = (
     39_000 => \&_apply_authoritative_metadata_event,
     39_001 => \&_apply_authoritative_admins_event,
@@ -1136,18 +1145,18 @@ sub _authoritative_channel_view_from_state {
   }
 
   my %view = (
-    operation             => 'authoritative_channel_view',
-    authority_profile     => 'nip29',
-    object_type           => 'chat.channel',
-    object_id             => "irc:$context->{network}:$context->{target}",
-    group_host            => $context->{group_host},
-    group_id              => $context->{group_id},
-    group_ref             => $context->{group_ref},
-    channel_modes         => _channel_modes_from_metadata($metadata),
-    supported_roles       => [@{$state->{supported_roles}}],
-    members               => \@derived_members,
-    present_members       => \@present_members,
-    pending_invites       => \@pending_invites,
+    operation         => 'authoritative_channel_view',
+    authority_profile => 'nip29',
+    object_type       => 'chat.channel',
+    object_id       => "irc:$context->{network}:" . Overnet::Authority::HostedChannel::irc_casefold($context->{target}),
+    group_host      => $context->{group_host},
+    group_id        => $context->{group_id},
+    group_ref       => $context->{group_ref},
+    channel_modes   => _channel_modes_from_metadata($metadata),
+    supported_roles => [@{$state->{supported_roles}}],
+    members         => \@derived_members,
+    present_members => \@present_members,
+    pending_invites => \@pending_invites,
     pending_join_requests => \@pending_join_requests,
   );
 
@@ -2449,83 +2458,15 @@ sub _irc_mask_from_group_event {
 }
 
 sub _sorted_authoritative_group_events {
-  my @raw_events = @_;
-  my @decorated;
-
-  for my $raw_event (@raw_events) {
-    if (ref($raw_event) ne 'HASH') {
-      croak "authoritative events must be objects\n";
-    }
-
+  my ($input, %options) = @_;
+  my @events;
+  for my $raw_event (@{$input}) {
+    croak "authoritative events must be objects\n" if ref($raw_event) ne 'HASH';
     my $event = eval { Net::Nostr::Event->new(%{$raw_event}) };
-    if (!$event) {
-      croak "authoritative events must be valid Nostr events\n";
-    }
-
-    my ($authority, $sequence) = _authority_ordering_from_event($event);
-    push @decorated,
-      [
-      $event->created_at + 0,
-      _authoritative_semantic_phase_for_event($event),
-      $authority, $sequence, lc($event->id || q{}), $event,
-      ];
+    croak "authoritative events must be valid Nostr events\n" if !$event;
+    push @events, $event;
   }
-
-  return map { $_->[5] } sort {
-    $a->[0] <=> $b->[0]
-      || (
-         length($a->[2])
-      && length($b->[2])
-      && $a->[2] eq $b->[2] && $a->[3] > 0 && $b->[3] > 0
-      ? ($a->[3] <=> $b->[3])
-      : 0
-      )
-      || $a->[1] <=> $b->[1]
-      || $a->[4] cmp $b->[4]
-  } @decorated;
-}
-
-sub _authoritative_semantic_phase_for_event {
-  my ($event) = @_;
-  my $kind = $event->kind;
-
-  if ($kind == 9_000 || $kind == 9_002 || $kind == 9_009) {
-    return 0;
-  }
-  if ($kind == 9_021) {
-    return 1;
-  }
-  if ($kind == 9_001 || $kind == 9_022) {
-    return 2;
-  }
-  if ($kind == 39_000 || $kind == 39_001 || $kind == 39_002 || $kind == 39_003) {
-    return 3;
-  }
-  return 4;
-}
-
-sub _authority_ordering_from_event {
-  my ($event)   = @_;
-  my $authority = q{};
-  my $sequence  = 0;
-
-  for my $tag (@{$event->tags || []}) {
-    if (!_tag_has_value($tag)) {
-      next;
-    }
-    if (($tag->[0] || q{}) eq 'overnet_authority' && !length($authority)) {
-      $authority = defined($tag->[1]) && !ref($tag->[1]) ? $tag->[1] : q{};
-      next;
-    }
-    if (($tag->[0] || q{}) eq 'overnet_sequence' && !$sequence) {
-      $sequence =
-        (defined($tag->[1]) && !ref($tag->[1]) && $tag->[1] =~ /\A\d+\z/msx)
-        ? 0 + $tag->[1]
-        : 0;
-    }
-  }
-
-  return ($authority, $sequence);
+  return @{Overnet::Authority::HostedChannel::ordered_events(\@events, %options)};
 }
 
 sub _apply_delegated_authority_tags {
@@ -2539,7 +2480,7 @@ sub _apply_delegated_authority_tags {
   push @{$event_hash->{tags}},
     ['overnet_actor',     $args{actor_pubkey}],
     ['overnet_authority', $args{authority_event_id}],
-    ['overnet_sequence',  0 + $args{authority_sequence}];
+    ['overnet_sequence',  qq{$args{authority_sequence}}];
   return;
 }
 

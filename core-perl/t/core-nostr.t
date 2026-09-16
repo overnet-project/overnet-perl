@@ -188,6 +188,9 @@ subtest 'wrap_private_message validates and wraps payloads' => sub {
     'reference recipient entries croak',
   );
 
+  like dies { Overnet::Core::Nostr->wrap_private_message(sender_key => $sender, payload => {},
+    recipient_pubkeys => [$recipient->pubkey_hex, $sender->pubkey_hex]) },
+    qr/exactly one recipient/, 'the companion cannot create multi-recipient rumors';
   my $to_both = Overnet::Core::Nostr->wrap_private_message(
     sender_key        => $sender,
     payload           => {type => 'note'},
@@ -428,5 +431,38 @@ subtest 'query_events dispatch edge paths' => sub {
   );
   is($closed, [], 'a CLOSED subscription finishes the query empty');
 };
+
+subtest 'client validates original JSON before the Nostr parser coerces it' => sub {
+  require Overnet::Core::Nostr::Client;
+  my $connection = bless {}, 'RawAuditConnection';
+  my $client = Overnet::Core::Nostr::Client->new;
+  $client->_conn($connection);
+  $client->_setup_handlers;
+  my @received;
+  $client->on(event => sub { push @received, $_[1] });
+  my $key = Net::Nostr::Key->new;
+  my $event = $key->create_event(kind => 1, created_at => 100, tags => [], content => 'hi');
+  my $wire = JSON::encode_json(['EVENT', 'audit', $event->to_hash]);
+  for my $bad (
+    ($wire =~ s/"kind":1/"kind":"1"/r),
+    ($wire =~ s/"kind":1/"kind":0,"kind":1/r),
+    ($wire =~ s/"kind":1/"kind":0,"\\u006bind":1/r),
+  ) {
+    $connection->{each_message}->($connection, bless({raw => $bad}, 'RawAuditMessage'));
+  }
+  is scalar @received, 0, 'coerced and duplicate members never reach event consumers';
+  $connection->{each_message}->($connection, bless({raw => $wire}, 'RawAuditMessage'));
+  is scalar @received, 1, 'valid signed event is delivered';
+  is $received[0]->id, $event->id, 'signed bytes are unchanged';
+};
+
+{
+  package RawAuditConnection;
+  sub on { my ($self, $name, $callback) = @_; $self->{$name} = $callback; }
+  sub close { return; }
+  sub send { return; }
+  package RawAuditMessage;
+  sub body { return $_[0]{raw}; }
+}
 
 done_testing;

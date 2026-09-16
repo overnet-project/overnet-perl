@@ -6,6 +6,13 @@ use Test2::V0;
 use Overnet::Auth::Agent;
 use Overnet::Core::Nostr;
 
+# These unit tests exercise policy and backend behavior under a trusted host.
+# auth-audit.t separately exercises unverified and cross-program callers.
+sub _dispatch {
+  my ($agent, $request) = @_;
+  return $agent->dispatch($request, caller => {program_id => 'irc.bridge', admin => 1});
+}
+
 my $fixture_secret = '1111111111111111111111111111111111111111111111111111111111111111';
 my $fixture_pubkey = '4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa';
 
@@ -79,7 +86,7 @@ sub _authorize_request {
 subtest 'sessions.authorize fails closed by default when no policy matches' => sub {
   my $agent = Overnet::Auth::Agent->new(identities => [_direct_secret_identity()],);
 
-  my $response = $agent->dispatch(_authorize_request());
+  my $response = _dispatch($agent, _authorize_request());
 
   is $response->{ok}, 0, 'unattended authorize is denied without a matching policy';
   is $response->{error}{code}, 'auth.headless_unavailable',
@@ -89,7 +96,7 @@ subtest 'sessions.authorize fails closed by default when no policy matches' => s
 subtest 'sessions.authorize ignores a client-supplied interactive flag' => sub {
   my $agent = Overnet::Auth::Agent->new(identities => [_direct_secret_identity()],);
 
-  my $response = $agent->dispatch(_authorize_request(interactive => JSON::true));
+  my $response = _dispatch($agent, _authorize_request(interactive => JSON::true));
 
   is $response->{ok}, 0, 'a client interactive flag does not grant approval';
   is $response->{error}{code}, 'auth.headless_unavailable',
@@ -102,7 +109,7 @@ subtest 'sessions.authorize allows unattended approval only when the agent opts 
     identities                   => [_direct_secret_identity()],
   );
 
-  my $response = $agent->dispatch(_authorize_request());
+  my $response = _dispatch($agent, _authorize_request());
 
   is $response->{ok}, 1, 'an opted-in agent auto-approves without a policy';
   is $response->{result}{artifacts}[0]{value}{pubkey}, $fixture_pubkey,
@@ -127,7 +134,7 @@ subtest 'sessions.authorize uses the direct_secret backend type' => sub {
     ],
   );
 
-  my $response = $agent->dispatch(
+  my $response = _dispatch($agent,
     {
       type   => 'request',
       id     => 'auth-direct-1',
@@ -190,7 +197,7 @@ subtest 'sessions.authorize uses the pass backend type' => sub {
     ],
   );
 
-  my $response = $agent->dispatch(
+  my $response = _dispatch($agent,
     {
       type   => 'request',
       id     => 'auth-pass-1',
@@ -246,7 +253,7 @@ subtest 'sessions.authorize reports auth.backend_unavailable for an unknown back
     ],
   );
 
-  my $response = $agent->dispatch(
+  my $response = _dispatch($agent,
     {
       type   => 'request',
       id     => 'auth-unknown-1',
@@ -302,7 +309,7 @@ subtest 'sessions.authorize honors an injected backend instance' => sub {
     ],
   );
 
-  my $response = $agent->dispatch(
+  my $response = _dispatch($agent,
     {
       type   => 'request',
       id     => 'auth-object-1',
@@ -360,7 +367,7 @@ subtest 'sessions.authorize invokes the backend for each authorization request' 
   );
 
   for my $id (1, 2) {
-    my $response = $agent->dispatch(
+    my $response = _dispatch($agent,
       {
         type   => 'request',
         id     => "auth-repeat-$id",
@@ -441,6 +448,7 @@ subtest 'sessions.renew propagates auth.backend_unavailable when the identity ba
         scope     => 'irc://irc.example.test/overnet',
         action    => 'session.authenticate',
         renewable => 1,
+        expires_at => 4_000_000_000,
         artifacts => [
           {
             type   => 'nostr.event',
@@ -459,7 +467,7 @@ subtest 'sessions.renew propagates auth.backend_unavailable when the identity ba
     ],
   );
 
-  my $renew = $agent->dispatch(
+  my $renew = _dispatch($agent,
     {
       type   => 'request',
       id     => 'renew-backend-1',
@@ -470,7 +478,7 @@ subtest 'sessions.renew propagates auth.backend_unavailable when the identity ba
           type  => 'opaque',
           value => '6cf8a952df516a8e691c6138496516abe84ccfefa9678f518bb52f70b1ca966f',
         },
-        interactive => 0,
+        interactive => JSON::false,
       },
     }
   );
@@ -505,12 +513,13 @@ subtest 'sessions.revoke drops one stored session so later renew fails' => sub {
         scope     => 'irc://irc.example.test/overnet',
         action    => 'session.delegate',
         renewable => 1,
+        expires_at => 4_000_000_000,
         artifacts => [],
       },
     ],
   );
 
-  my $revoke = $agent->dispatch(
+  my $revoke = _dispatch($agent,
     {
       type   => 'request',
       id     => 'revoke-1',
@@ -523,14 +532,14 @@ subtest 'sessions.revoke drops one stored session so later renew fails' => sub {
 
   is $revoke->{ok}, 1, 'revoke succeeds';
 
-  my $renew = $agent->dispatch(
+  my $renew = _dispatch($agent,
     {
       type   => 'request',
       id     => 'renew-1',
       method => 'sessions.renew',
       params => {
         session_handle => {id => 'sess-1'},
-        interactive    => 0,
+        interactive    => JSON::false,
       },
     }
   );
@@ -568,12 +577,13 @@ subtest 'sessions.revoke succeeds without consulting an unavailable backend' => 
         scope     => 'irc://irc.example.test/overnet',
         action    => 'session.authenticate',
         renewable => 1,
+        expires_at => 4_000_000_000,
         artifacts => [],
       },
     ],
   );
 
-  my $revoke = $agent->dispatch(
+  my $revoke = _dispatch($agent,
     {
       type   => 'request',
       id     => 'revoke-backend-1',
@@ -611,7 +621,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
     },
   );
 
-  my $grant = $agent->dispatch(
+  my $grant = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policy-grant-1',
@@ -637,7 +647,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
   is $grant->{ok},                        1,          'policy grant succeeds';
   is $grant->{result}{policy}{policy_id}, 'policy-1', 'policy ids are assigned deterministically';
 
-  my $headless = $agent->dispatch(
+  my $headless = _dispatch($agent,
     {
       type   => 'request',
       id     => 'authorize-policy-1',
@@ -665,7 +675,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
                 [server     => 'irc://irc.example.test/overnet'],
                 [delegate   => ('d' x 64)],
                 [session    => 'session-123'],
-                [expires_at => '1776884345'],
+                [expires_at => '' . (time + 600)],
               ],
             },
           },
@@ -676,7 +686,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
 
   is $headless->{ok}, 1, 'granted policy allows headless authorization';
 
-  my $revoke = $agent->dispatch(
+  my $revoke = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policy-revoke-1',
@@ -689,7 +699,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
 
   is $revoke->{ok}, 1, 'policy revoke succeeds';
 
-  my $after_revoke = $agent->dispatch(
+  my $after_revoke = _dispatch($agent,
     {
       type   => 'request',
       id     => 'authorize-policy-2',
@@ -717,7 +727,7 @@ subtest 'policies.grant enables matching headless authorization until policies.r
                 [server     => 'irc://irc.example.test/overnet'],
                 [delegate   => ('d' x 64)],
                 [session    => 'session-456'],
-                [expires_at => '1776884345'],
+                [expires_at => '' . (time + 600)],
               ],
             },
           },
@@ -765,12 +775,13 @@ subtest 'policies.list and sessions.list expose stored auth state' => sub {
         scope     => 'irc://irc.example.test/overnet',
         action    => 'session.authenticate',
         renewable => 1,
+        expires_at => 4_000_000_000,
         artifacts => [],
       },
     ],
   );
 
-  my $policies = $agent->dispatch(
+  my $policies = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policies-list-1',
@@ -778,7 +789,7 @@ subtest 'policies.list and sessions.list expose stored auth state' => sub {
       params => {},
     }
   );
-  my $sessions = $agent->dispatch(
+  my $sessions = _dispatch($agent,
     {
       type   => 'request',
       id     => 'sessions-list-1',
@@ -813,6 +824,7 @@ subtest 'policies.list and sessions.list expose stored auth state' => sub {
       scope     => 'irc://irc.example.test/overnet',
       action    => 'session.authenticate',
       renewable => 1,
+        expires_at => 4_000_000_000,
     },
     ],
     'sessions.list returns stored sessions';
@@ -831,7 +843,7 @@ subtest 'sessions.list tolerates seeded sessions with missing fields' => sub {
     ],
   );
 
-  my $sessions = $agent->dispatch(
+  my $sessions = _dispatch($agent,
     {
       type   => 'request',
       id     => 'sessions-list-sparse-1',
@@ -859,7 +871,7 @@ subtest 'sessions.list tolerates seeded sessions with missing fields' => sub {
 subtest 'service_pins.set, service_pins.list, and service_pins.forget manage pinned service identities' => sub {
   my $agent = Overnet::Auth::Agent->new;
 
-  my $set = $agent->dispatch(
+  my $set = _dispatch($agent,
     {
       type   => 'request',
       id     => 'service-pin-set-1',
@@ -877,7 +889,7 @@ subtest 'service_pins.set, service_pins.list, and service_pins.forget manage pin
 
   is $set->{ok}, 1, 'service pin set succeeds';
 
-  my $list = $agent->dispatch(
+  my $list = _dispatch($agent,
     {
       type   => 'request',
       id     => 'service-pins-list-1',
@@ -900,7 +912,7 @@ subtest 'service_pins.set, service_pins.list, and service_pins.forget manage pin
     ],
     'service_pins.list returns the stored pin';
 
-  my $forget = $agent->dispatch(
+  my $forget = _dispatch($agent,
     {
       type   => 'request',
       id     => 'service-pin-forget-1',
@@ -913,7 +925,7 @@ subtest 'service_pins.set, service_pins.list, and service_pins.forget manage pin
 
   is $forget->{ok}, 1, 'service pin forget succeeds';
 
-  my $empty = $agent->dispatch(
+  my $empty = _dispatch($agent,
     {
       type   => 'request',
       id     => 'service-pins-list-2',
@@ -943,7 +955,7 @@ subtest 'policies.grant advances policy ids past preloaded policy ids and accept
     ],
   );
 
-  my $grant = $agent->dispatch(
+  my $grant = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policy-grant-2',
@@ -983,7 +995,7 @@ subtest 'state_writer persists policy and service-pin changes' => sub {
     },
   );
 
-  my $grant = $agent->dispatch(
+  my $grant = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policy-grant-write-1',
@@ -1002,7 +1014,7 @@ subtest 'state_writer persists policy and service-pin changes' => sub {
       },
     }
   );
-  my $set = $agent->dispatch(
+  my $set = _dispatch($agent,
     {
       type   => 'request',
       id     => 'service-pin-set-write-1',
@@ -1052,7 +1064,7 @@ subtest 'authorize and revoke persist session state and roll back on state write
     },
   );
 
-  my $authorize = $agent->dispatch(
+  my $authorize = _dispatch($agent,
     {
       type   => 'request',
       id     => 'authorize-write-1',
@@ -1097,7 +1109,7 @@ subtest 'authorize and revoke persist session state and roll back on state write
     ('1' x 64),
     'authorize persisted first-contact service pin state';
 
-  my $revoke = $agent->dispatch(
+  my $revoke = _dispatch($agent,
     {
       type   => 'request',
       id     => 'revoke-write-1',
@@ -1112,7 +1124,7 @@ subtest 'authorize and revoke persist session state and roll back on state write
   is $writes[1]{sessions}, [], 'revoke persisted session removal';
 
   $fail = 1;
-  my $failed = $agent->dispatch(
+  my $failed = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policy-grant-write-fail-1',
@@ -1128,7 +1140,7 @@ subtest 'authorize and revoke persist session state and roll back on state write
       },
     }
   );
-  my $policies = $agent->dispatch(
+  my $policies = _dispatch($agent,
     {
       type   => 'request',
       id     => 'policies-list-after-fail-1',
@@ -1149,7 +1161,7 @@ subtest 'unexpected handler failures surface as auth.internal_failure responses'
   local *Overnet::Auth::Agent::_dispatch_sessions_list = sub { die "session store exploded\n" };
   use warnings 'redefine';
 
-  my $response = $agent->dispatch(
+  my $response = _dispatch($agent,
     {
       type   => 'request',
       id     => 'internal-failure-1',
@@ -1178,22 +1190,22 @@ sub _request {
 
 sub _dispatch_error {
   my ($agent, $method, $params, %overrides) = @_;
-  my $response = $agent->dispatch(_request($method, $params, %overrides));
+  my $response = _dispatch($agent, _request($method, $params, %overrides));
   return $response->{error};
 }
 
 subtest 'dispatch rejects malformed request envelopes' => sub {
   my $agent = Overnet::Auth::Agent->new(identities => [_direct_secret_identity()]);
 
-  my $not_object = $agent->dispatch('junk');
+  my $not_object = _dispatch($agent, 'junk');
   is $not_object->{error}{code}, 'protocol.invalid_message', 'non-object requests are refused';
   is $not_object->{id}, undef, 'no id is echoed for non-object requests';
 
-  my $no_method = $agent->dispatch({type => 'request', id => ['ref-id']});
+  my $no_method = _dispatch($agent, {type => 'request', id => ['ref-id']});
   is $no_method->{error}{message}, 'method is required', 'a method is required';
   is $no_method->{id}, undef, 'reference ids are not echoed';
 
-  is $agent->dispatch({type => 'request', id => 'e', method => q{}})->{error}{message},
+  is _dispatch($agent, {type => 'request', id => 'e', method => q{}})->{error}{message},
     'method is required', 'empty methods are refused';
 
   like(
@@ -1203,12 +1215,10 @@ subtest 'dispatch rejects malformed request envelopes' => sub {
   );
 };
 
-subtest 'constructor state ingestion skips malformed entries' => sub {
+subtest 'constructor state ingestion preserves valid trust records' => sub {
   my $agent = Overnet::Auth::Agent->new(
     identities => ['junk', {identity_id => []}, {identity_id => q{}}, _direct_secret_identity()],
     policies   => [
-      'junk',
-      {identity_id => 'default'},
       {
         policy_id   => 'policy-7',
         identity_id => 'default',
@@ -1228,7 +1238,6 @@ subtest 'constructor state ingestion skips malformed entries' => sub {
     ],
     service_pins => {
       'irc://pinned' => {scheme => 'nostr.pubkey', value => ('a' x 64)},
-      'irc://junk'   => 'junk',
     },
     sessions => [
       'junk',
@@ -1243,24 +1252,24 @@ subtest 'constructor state ingestion skips malformed entries' => sub {
     ],
   );
 
-  my $identities = $agent->dispatch(_request('identities.list', {}));
+  my $identities = _dispatch($agent, _request('identities.list', {}));
   is scalar(@{$identities->{result}{identities}}), 1, 'malformed identities are skipped';
   is $identities->{result}{identities}[0]{backend_type}, 'direct_secret',
     'identity backend types are reported';
 
-  my $policies = $agent->dispatch(_request('policies.list', {}));
-  is scalar(@{$policies->{result}{policies}}), 2, 'malformed policies are skipped';
+  my $policies = _dispatch($agent, _request('policies.list', {}));
+  is scalar(@{$policies->{result}{policies}}), 2, 'valid policies are retained';
   is $policies->{result}{policies}[1]{locators}, ['irc://y'],
     'single-locator policies normalize to locator lists';
 
-  my $pins = $agent->dispatch(_request('service_pins.list', {}));
-  is scalar(@{$pins->{result}{service_pins}}), 1, 'malformed service pins are skipped';
+  my $pins = _dispatch($agent, _request('service_pins.list', {}));
+  is scalar(@{$pins->{result}{service_pins}}), 1, 'valid pins are retained';
 
-  my $sessions = $agent->dispatch(_request('sessions.list', {}));
+  my $sessions = _dispatch($agent, _request('sessions.list', {}));
   is scalar(@{$sessions->{result}{sessions}}), 1, 'malformed sessions are skipped';
   is $sessions->{result}{sessions}[0]{expires_at}, 12_345, 'session expirations are reported';
 
-  my $granted = $agent->dispatch(
+  my $granted = _dispatch($agent,
     _request(
       'policies.grant',
       {
@@ -1321,7 +1330,7 @@ subtest 'handler params validation rejects malformed inputs' => sub {
   is _dispatch_error($agent, 'service_pins.forget', {locator => q{}})->{message},
     'locator is required', 'pin forget requires a locator';
 
-  my $pinned = $agent->dispatch(
+  my $pinned = _dispatch($agent,
     _request(
       'service_pins.set',
       {
@@ -1348,14 +1357,16 @@ subtest 'identity resolution failures' => sub {
   my $error = _dispatch_error($agent, 'sessions.authorize', _authorize_request()->{params});
   isnt $error->{code}, 'auth.unknown_identity', 'sanity: the default identity resolves';
 
-  my $unknown = $agent->dispatch(_authorize_request(identity_id => 'ghost'));
+  my $unknown = _dispatch($agent, _authorize_request(identity_id => 'ghost'));
   is $unknown->{error}{code}, 'auth.unknown_identity', 'unknown identity ids are refused';
 
   my $two = Overnet::Auth::Agent->new(
     identities => [_direct_secret_identity(), {%{_direct_secret_identity()}, identity_id => 'second'}],
     allow_unattended_autoapprove => JSON::true,
   );
-  my $ambiguous = $two->dispatch(_authorize_request(identity_id => undef));
+  my $without_identity = _authorize_request();
+  delete $without_identity->{params}{identity_id};
+  my $ambiguous = _dispatch($two, $without_identity);
   is $ambiguous->{error}{code}, 'auth.identity_required',
     'multiple identities require an explicit identity id';
 
@@ -1363,7 +1374,7 @@ subtest 'identity resolution failures' => sub {
     identities                   => [_direct_secret_identity()],
     allow_unattended_autoapprove => JSON::true,
   );
-  my $defaulted = $one->dispatch(_authorize_request(identity_id => undef));
+  my $defaulted = _dispatch($one, $without_identity);
   is $defaulted->{result}{identity_id}, 'default',
     'a single identity is used as the default';
 };
@@ -1375,7 +1386,7 @@ subtest 'authorize parameter validation' => sub {
   );
   my $authorize_error = sub {
     my (%overrides) = @_;
-    return $agent->dispatch(_authorize_request(%overrides))->{error};
+    return _dispatch($agent, _authorize_request(%overrides))->{error};
   };
 
   is $authorize_error->(program_id => q{})->{message}, 'program_id is required',
@@ -1396,10 +1407,10 @@ subtest 'authorize parameter validation' => sub {
   is $authorize_error->(artifacts => [{type => 'nostr.event', params => 'junk'}])->{message},
     'artifact params must be an object', 'artifact params must be objects';
   is $authorize_error->(challenge => undef)->{message},
-    'challenge.value is required for session.authenticate', 'a challenge is required';
+    'challenge must be an object', 'a null challenge is rejected';
   is $authorize_error->(challenge => {value => q{}})->{message},
     'challenge.value is required for session.authenticate', 'empty challenge values are refused';
-  is $authorize_error->(artifacts => [{type => 'nostr.event', params => {kind => 1}}])->{message},
+  is $authorize_error->(artifacts => [{type => 'nostr.event', params => {kind => 1, tags => []}}])->{message},
     'session.authenticate requires kind 22242 nostr.event artifact',
     'authenticate artifacts must be kind 22242';
 
@@ -1407,14 +1418,14 @@ subtest 'authorize parameter validation' => sub {
     identities                   => [{identity_id => 'default', backend_type => 'gpg'}],
     allow_unattended_autoapprove => JSON::true,
   );
-  is $backendless->dispatch(_authorize_request())->{error}{message},
+  is _dispatch($backendless, _authorize_request())->{error}{message},
     'unsupported backend_type: gpg', 'unsupported backend types are refused';
 
   my $empty_backend_type = Overnet::Auth::Agent->new(
     identities => [{%{_direct_secret_identity()}, backend_type => q{}}],
     allow_unattended_autoapprove => JSON::true,
   );
-  ok $empty_backend_type->dispatch(_authorize_request())->{ok},
+  ok _dispatch($empty_backend_type, _authorize_request())->{ok},
     'an empty backend type defaults to direct_secret';
 };
 
@@ -1426,7 +1437,7 @@ subtest 'session delegation artifacts validate their tags' => sub {
       server     => 'irc://irc.example.test/overnet',
       delegate   => ('d' x 64),
       session    => 'sess-remote',
-      expires_at => '12345',
+      expires_at => '' . (time + 600),
       %tags,
     );
     return [map { [$_, $all{$_}] } grep { defined $all{$_} } sort keys %all];
@@ -1437,10 +1448,10 @@ subtest 'session delegation artifacts validate their tags' => sub {
   );
   my $delegate = sub {
     my ($tags, %artifact) = @_;
-    return $agent->dispatch(
+    return _dispatch($agent,
       _authorize_request(
         action    => 'session.delegate',
-        challenge => undef,
+        challenge => {},
         artifacts => [{type => 'nostr.event', params => {kind => 14_142, tags => $tags, %artifact}}],
       ),
     );
@@ -1470,7 +1481,7 @@ subtest 'authenticate artifacts must match the requested scope and challenge' =>
   );
   my $challenge = '6cf8a952df516a8e691c6138496516abe84ccfefa9678f518bb52f70b1ca966f';
 
-  my $wrong_relay = $agent->dispatch(
+  my $wrong_relay = _dispatch($agent,
     _authorize_request(
       artifacts => [
         {
@@ -1483,14 +1494,14 @@ subtest 'authenticate artifacts must match the requested scope and challenge' =>
   like $wrong_relay->{error}{message}, qr/relay tag must match/,
     'mismatched relay tags are refused';
 
-  my $wrong_challenge = $agent->dispatch(
+  my $wrong_challenge = _dispatch($agent,
     _authorize_request(
       artifacts => [
         {
           type   => 'nostr.event',
           params => {
             kind => 22_242,
-            tags => [[relay => 'irc://irc.example.test/overnet'], [challenge => 'other'], 'junk', ['solo']],
+            tags => [[relay => 'irc://irc.example.test/overnet'], [challenge => 'other'], ['solo']],
           },
         },
       ],
@@ -1510,7 +1521,7 @@ subtest 'service pins guard authorization' => sub {
     },
   );
 
-  my $mismatch = $agent->dispatch(
+  my $mismatch = _dispatch($agent,
     _authorize_request(
       service => {locators => ['irc://pinned'], service_identity => $service_identity},
     ),
@@ -1518,7 +1529,7 @@ subtest 'service pins guard authorization' => sub {
   is $mismatch->{error}{code}, 'auth.service_identity_mismatch',
     'a mismatched pinned identity refuses authorization';
 
-  my $known = $agent->dispatch(
+  my $known = _dispatch($agent,
     _authorize_request(
       service => {
         locators         => ['irc://pinned'],
@@ -1528,20 +1539,20 @@ subtest 'service pins guard authorization' => sub {
   );
   is $known->{result}{service_pin_state}, 'known', 'a matching pin reports known state';
 
-  my $first = $agent->dispatch(
+  my $first = _dispatch($agent,
     _authorize_request(
-      service => {locators => ['irc://fresh', q{}], service_identity => $service_identity},
+      service => {locators => ['irc://fresh'], service_identity => $service_identity},
     ),
   );
   is $first->{result}{service_pin_state}, 'first_contact',
     'an unpinned service identity reports first contact';
-  my $pins = $agent->dispatch(_request('service_pins.list', {}));
+  my $pins = _dispatch($agent, _request('service_pins.list', {}));
   ok((grep { $_->{locator} eq 'irc://fresh' } @{$pins->{result}{service_pins}}),
     'first contact pins the presented identity');
   ok !(grep { $_->{locator} eq q{} } @{$pins->{result}{service_pins}}),
     'empty locators are never pinned';
 
-  my $provisional = $agent->dispatch(_authorize_request());
+  my $provisional = _dispatch($agent, _authorize_request());
   is $provisional->{result}{service_pin_state}, 'provisional',
     'no service identity reports provisional state';
 };
@@ -1559,12 +1570,12 @@ subtest 'policy matching covers locator and identity comparisons' => sub {
       identities => [_direct_secret_identity()],
       policies   => [$policy],
     );
-    return $agent->dispatch(_authorize_request(%service));
+    return _dispatch($agent, _authorize_request(%service));
   };
 
   ok $match_with->({%policy_base, locators => ['irc://irc.example.test/overnet']})->{ok},
     'matching locators authorize';
-  is $match_with->({%policy_base, program_id => 'other'})->{error}{code},
+  is $match_with->({%policy_base, program_id => 'other', locators => ['irc://irc.example.test/overnet']})->{error}{code},
     'auth.headless_unavailable', 'a base field mismatch fails closed';
   is $match_with->({%policy_base, locators => ['irc://other']})->{error}{code},
     'auth.headless_unavailable', 'a locator mismatch fails closed';
@@ -1603,6 +1614,7 @@ subtest 'session renewal edge paths' => sub {
     service     => {locators => ['irc://irc.example.test/overnet']},
     scope       => 'irc://irc.example.test/overnet',
     action      => 'session.authenticate',
+    expires_at  => time + 600,
   );
   my %policy = (
     identity_id => 'default',
@@ -1619,7 +1631,7 @@ subtest 'session renewal edge paths' => sub {
       sessions   => [$session],
       %agent_args,
     );
-    return $agent->dispatch(
+    return _dispatch($agent,
       _request(
         'sessions.renew',
         {
@@ -1634,7 +1646,8 @@ subtest 'session renewal edge paths' => sub {
   is $renew->({session_handle => {id => 'sess-1'}, %session_base})->{error}{code},
     'auth.policy_denied', 'non-renewable sessions are refused';
   is $renew->(
-    {session_handle => {id => 'sess-1'}, %session_base, renewable => 1, identity_id => 'ghost'},
+    {session_handle => {id => 'sess-1'}, %session_base, renewable => 1,
+        expires_at => 4_000_000_000, identity_id => 'ghost'},
   )->{error}{code}, 'auth.unknown_identity', 'sessions for unknown identities are refused';
   is $renew->({session_handle => {id => 'sess-1'}, %session_base, renewable => 1})->{error}{code},
     'auth.policy_denied', 'sessions without a matching policy are refused';
@@ -1652,6 +1665,7 @@ subtest 'session renewal edge paths' => sub {
       %session_base,
       action    => 'session.wat',
       renewable => 1,
+        expires_at => 4_000_000_000,
       artifacts => [{type => 'nostr.event', params => {kind => 22_242, tags => []}}],
     },
     policies => [{%policy, action => 'session.wat'}],
@@ -1688,16 +1702,16 @@ subtest 'state persistence failures roll back mutations' => sub {
     my ($method, $params) = @{$case};
     my $error = _dispatch_error($failing, $method, $params);
     is $error->{code},    'auth.internal_failure', "$method reports the persistence failure";
-    is $error->{message}, 'disk exploded',         "$method surfaces the writer error";
+    is $error->{message}, 'Unable to persist authentication state', "$method hides storage diagnostics";
   }
 
-  my $authorize_error = $failing->dispatch(_authorize_request());
+  my $authorize_error = _dispatch($failing, _authorize_request());
   is $authorize_error->{error}{code}, 'auth.internal_failure',
     'authorize reports the persistence failure';
 
-  is scalar(@{$failing->dispatch(_request('policies.list', {}))->{result}{policies}}), 0,
+  is scalar(@{_dispatch($failing, _request('policies.list', {}))->{result}{policies}}), 0,
     'failed grants are rolled back';
-  ok $failing->dispatch(_request('sessions.list', {}))->{result}{sessions}[0],
+  ok _dispatch($failing, _request('sessions.list', {}))->{result}{sessions}[0],
     'failed revocations are rolled back';
 
   my $false_writer = Overnet::Auth::Agent->new(
@@ -1705,7 +1719,23 @@ subtest 'state persistence failures roll back mutations' => sub {
     state_writer => sub { return 0 },
   );
   is _dispatch_error($false_writer, 'policies.grant', {%grant_params})->{message},
-    'auth state write failed', 'a writer returning false reports a generic failure';
+    'Unable to persist authentication state', 'a writer returning false reports a generic failure';
+};
+
+subtest 'malformed artifact wire types are rejected before key access' => sub {
+  my $backend = t::auth_agent::CountingBackend->new(secret => $fixture_secret);
+  my $agent = Overnet::Auth::Agent->new(
+    allow_unattended_autoapprove => 1,
+    identities => [{%{_direct_secret_identity()}, backend => $backend}],
+  );
+  for my $change (sub { $_[0]{kind} = '22242' }, sub { $_[0]{tags}[0][1] = 42 },
+    sub { $_[0]{tags}[0] = 'not a tag' }) {
+    my $request = _authorize_request();
+    $change->($request->{params}{artifacts}[0]{params});
+    my $response = _dispatch($agent, $request);
+    is $response->{error}{code}, 'protocol.invalid_params', 'invalid artifact refused';
+    is $backend->calls, 0, 'signing key was not requested';
+  }
 };
 
 done_testing;

@@ -86,6 +86,15 @@ the corresponding future implementations.
 ## Auth Agent
 
 The reference auth-agent daemon reads one JSON config file and listens on one local auth socket.
+The default socket has no authenticated program binding: it permits discovery,
+but signing, session management and policy administration fail closed. A matching
+Unix user or request `program_id` is not sufficient. An embedding host may supply
+`caller_resolver` to `Overnet::Auth::Daemon` / `Overnet::Auth::Server`; it receives
+only the connected socket, before request parsing, and must derive `program_id`
+and optional administrative authority from a protected launch channel or platform
+application identity. The command-line daemon does not yet provide that binding.
+The client commands below require such a trusted host for privileged operations.
+Local session handles expire within five minutes and cannot outlive their grants.
 
 Static identity and backend configuration live in the daemon config file. Mutable auth-agent state lives in a separate state file managed by the daemon.
 
@@ -152,6 +161,58 @@ overnet-auth.pl authorize
 overnet-auth.pl renew
 overnet-auth.pl revoke
 ```
+
+## Browser Authentication Connector
+
+This connector contains the earlier Perl-backed browser integration. Its signing
+flow requires a trusted caller binding in the agent host; registering the native
+host alone does not supply that binding, and the default daemon refuses it. The current
+TypeScript extension in `overnet-client` runs its own agent and does not need it.
+
+`bin/overnet-auth-native.pl` connects a browser extension to the existing local
+auth agent through native messaging. It accepts `agent.info`, `identities.list`,
+and `browser.authenticate`; raw signing and administrative methods are rejected.
+It keeps
+the existing Overnet request/response envelopes and translates the browser's
+native-endian 32-bit framing into the auth client's socket protocol.
+
+From the top-level development workspace, register it for Firefox on Linux:
+
+```sh
+plx repos/overnet-perl/core-perl/deploy/native-messaging/install-firefox.pl \
+  --config-file /path/to/auth-agent.json
+```
+
+The installer reads the configured agent's `daemon.endpoint` and the extension
+ID from the local `overnet-client` checkout and writes a per-user native host
+manifest and launcher under `~/.mozilla/native-messaging-hosts/`. The launcher
+uses the workspace's `plx` configuration and existing Perl installation. The
+connector reads the socket path from your existing configuration and starts the
+agent when needed. Concurrent checks
+share a startup lock. The agent keeps running after the browser closes; diagnostics
+go to `<socket>.log` beside the socket. Re-running registration updates the launcher
+and manifest, including the socket path.
+
+The native host name is `org.overnet.auth`. Frames are limited to one MiB and
+status requests time out after five seconds. Authentication allows sixty seconds
+plus five seconds for cleanup. Connection failures return the structured error
+`native.agent_unavailable`.
+
+`browser.authenticate` is for the trusted extension after its approval UI obtains
+consent. It accepts the browser-derived `origin`, a unique `request_id`, selected
+`identity_id`, and shared service `challenge`. It constructs authentication and
+optional delegation requests with `Overnet::Auth::Exchange`. It creates temporary
+policies scoped to that origin, approval ID, identity, service, and action, then
+revokes those policies and local renewal handles before returning signed events.
+No general agent administration is exposed to websites.
+
+This first binding supports provisional locator trust and refuses to downgrade
+existing cryptographic pins. Delegation must be complete, use kind 14142, and
+expire within 24 hours. Forced termination or agent failure can prevent cleanup;
+approval IDs are unique and never reused by the extension. The Perl bridge remains
+a development step toward a JavaScript agent. See the
+browser extension README for the
+website protocol and approval interface.
 
 ## Tests
 

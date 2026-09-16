@@ -479,6 +479,24 @@ sub _spawn_child {
 
 sub _poll_io {
   my ($self, %args) = @_;
+  my $progress;
+  my $ok = eval { $progress = $self->_poll_ready_io(%args); 1; };
+  if (!$ok) {
+    my $error = $EVAL_ERROR;
+    $self->{instance}->abort_session;
+    $self->_release_runtime_resources;
+    $self->terminate(signal => 'TERM');
+    if (!$self->_reap_child_until(timeout_ms => 200)) {
+      $self->terminate(signal => 'KILL');
+      $self->_reap_child_until(timeout_ms => 200);
+    }
+    croak $error;
+  }
+  return $progress;
+}
+
+sub _poll_ready_io {
+  my ($self, %args) = @_;
   my $timeout_ms = exists $args{timeout_ms} ? $args{timeout_ms} : 0;
 
   $self->_reap_child;

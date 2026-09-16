@@ -6,14 +6,14 @@
    "input" : {
       "content" : "{\"provenance\":{\"type\":\"native\"},\"body\":{\"protocol\":\"irc\",\"origin\":\"irc.libera.chat\",\"origin_match\":\"prefix\",\"pubkeys\":[\"a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2c3a1b2\"]}}",
       "created_at" : 1744301100,
-      "id" : "f5094899875c4801e349f568f5d7f431bbe5d1c7bddb0220b313f22aede40755",
+      "id" : "0527b077c6686213fe8350749ba6300d0b0f7c6f95d4f10738bf7c29f54386bb",
       "kind" : 37800,
-      "pubkey" : "bc697d3506ec36fd6fcfa22f38629a29ddccae0e1ae45477112001908bbcb648",
-      "sig" : "720a8064ca57efcd674b6ae39995de4a825b54ce3775f455f49c73be7f7f96f6ffd9cc32b7517d54ef08fbf8858b85605b27eeb0f7f0f9a35c204a2129a322e6",
+      "pubkey" : "69bfe8ef59556c22c8602c12ec3225f0aad5a95c725a515f8762ae2757391ac3",
+      "sig" : "aaa6635f8c21f9e15b74ee23d25a1e5806d8b6d69b17d823cc84297a52b8e75b0c7095da6b1aa769aae01ae3b9047ec0d7a3fb7a57e6e5c8a6530b5fe188cf4a",
       "tags" : [
          [
             "d",
-            "irc:irc.libera.chat"
+            "urn:overnet:adapter-authority:697263:6972632e6c69626572612e63686174"
          ],
          [
             "overnet_v",
@@ -29,7 +29,7 @@
          ],
          [
             "overnet_oid",
-            "irc:irc.libera.chat"
+            "urn:overnet:adapter-authority:697263:6972632e6c69626572612e63686174"
          ],
          [
             "v",

@@ -320,4 +320,12 @@ subtest 'timer construction and helpers validate their inputs' => sub {
   );
 };
 
+subtest 'very overdue timers skip missed intervals without iterating over them' => sub {
+  my $now_ms = 1_700_000_000_000;
+  my $runtime = Overnet::Program::Runtime->new(now_cb => sub { $now_ms });
+  $runtime->schedule_timer(session_id => 's', timer_id => 'old', at => 0, repeat_ms => 1);
+  is scalar @{$runtime->drain_runtime_notifications('s')}, 1, 'one coalesced notification';
+  is scalar @{$runtime->drain_runtime_notifications('s')}, 0, 'next firing is strictly in the future';
+};
+
 done_testing;

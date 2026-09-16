@@ -74,6 +74,7 @@ subtest 'create_delegation_grant_event builds a verifiable kind 14142 delegation
   like $event->{sig}, qr/\A[0-9a-f]{128}\z/mx, 'the delegation grant includes a Schnorr signature';
 
   my $verification = Overnet::Authority::Delegation->verify_delegation_grant(
+      now => $created_at,
     authority_pubkey => $key->pubkey_hex,
     relay_url        => $relay_url,
     scope            => $scope,
@@ -170,6 +171,7 @@ subtest 'delegation grants validate every field' => sub {
   my $verify = sub {
     my (%override) = @_;
     return Overnet::Authority::Delegation->verify_delegation_grant(
+      now => 50,
       authority_pubkey => $key->pubkey_hex,
       %base,
       event => $grant,
@@ -195,6 +197,7 @@ subtest 'delegation grants validate every field' => sub {
     'delegation event expiration does not match', 'expiration mismatches are refused';
 
   my $verified = Overnet::Authority::Delegation->verify_delegation_grant(
+      now => 50,
     authority_pubkey => $key->pubkey_hex,
     %base,
     event => $grant,
@@ -220,6 +223,7 @@ subtest 'delegation grants validate every field' => sub {
   );
   ok(
     Overnet::Authority::Delegation->verify_delegation_grant(
+      now => 50,
       authority_pubkey => $key->pubkey_hex,
       %base,
       event => $duplicate_tags,
@@ -246,7 +250,7 @@ subtest 'delegated action checks are reusable outside hosted IRC channels' => su
   };
   my $grant  = $grant_for->();
   my $action = Overnet::Core::Nostr->event_from_wire(
-    $delegate->create_event_hash(kind => 1, created_at => 2_000, content => 'list action', tags => []),);
+    $delegate->create_event_hash(kind => 1, created_at => 1_999, content => 'list action', tags => []),);
   ok lives { $grant->validate; $action->validate; }, 'caller supplies signature-validated events';
   my $check = sub {
     my (%override) = @_;
@@ -256,11 +260,21 @@ subtest 'delegated action checks are reusable outside hosted IRC channels' => su
       actor_pubkey => $user->pubkey_hex,
       relay_url    => $relay_url,
       grant_kind   => 14_142,
+      now          => 1_999,
       %override,
     );
   };
   is $check->(), {valid => 1, pubkey => $user->pubkey_hex},
-    'the matching grant identifies the acting user at the existing expiry boundary';
+    'the matching grant identifies the acting user before the exclusive expiry boundary';
+  is $check->(now => 2_000)->{valid}, 0, 'a backdated action cannot pass at receiver expiry';
+  is $check->(now => undef)->{valid}, 0, 'an unavailable clock fails closed';
+  is $check->(now => 2_001, trusted_acceptance => {event_id => $action->id, accepted_at => 1_999})->{valid},
+    1, 'trusted history of this exact action permits later verification';
+  is $check->(now => 2_001, trusted_acceptance => {event_id => '0' x 64, accepted_at => 1_999})->{valid},
+    0, 'another event receipt cannot authorize a new ID';
+  my $boundary_action = Overnet::Core::Nostr->event_from_wire(
+    $delegate->create_event_hash(kind => 1, created_at => 2_000, content => q{}, tags => []));
+  is $check->(event => $boundary_action)->{valid}, 0, 'event time at expiry is also rejected';
   is $check->(grant        => undef)->{valid},                      0, 'a missing grant is refused';
   is $check->(grant_kind   => 1)->{valid},                          0, 'the configured grant kind is enforced';
   is $check->(actor_pubkey => $delegate->pubkey_hex)->{valid},      0, 'a different acting user is refused';

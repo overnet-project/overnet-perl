@@ -4,13 +4,14 @@ use strictures 2;
 
 use Carp         qw(croak);
 use Exporter     qw(import);
-use Scalar::Util qw(blessed);
+use Scalar::Util qw(blessed weaken);
 
 our $VERSION   = '0.001';
 our @EXPORT_OK = qw(build_authoritative_relay);
 
 use Net::Nostr::Group;
-use Net::Nostr::Relay;
+use Overnet::Authority::HostedChannel::Transport;
+use Overnet::Relay::Store;
 use Overnet::Authority::Delegation;
 use Overnet::Authority::HostedChannel ();
 use Overnet::Relay::Store::File;
@@ -18,18 +19,6 @@ use Overnet::Relay::Store::File;
 my %AUTHORITATIVE_CONTROL_KIND = map { $_ => 1 } (9_000, 9_001, 9_002, 9_009, 9_021, 9_022);
 my %GROUP_SNAPSHOT_KIND        = map { $_ => 1 } (39_000, 39_001, 39_002, 39_003);
 my %GROUP_EVENT_KIND           = map { $_ => 1 } (39_000, 39_001, 39_002, 9_000, 9_001, 9_002, 9_009, 9_021, 9_022);
-my %EVENT_SORT_RANK            = (
-  39_000 => 0,
-  39_001 => 1,
-  39_002 => 2,
-  39_003 => 3,
-  9_002  => 4,
-  9_009  => 5,
-  9_021  => 6,
-  9_022  => 7,
-  9_000  => 8,
-  9_001  => 9,
-);
 
 sub build_authoritative_relay {
   my (%args) = @_;
@@ -51,28 +40,18 @@ sub build_authoritative_relay {
   }
 
   my $relay;
-  my %retained_grants;
-  my @retained_content;
+  my $clock      = $args{clock} || sub {time};
   my %relay_args = (
-    relay_url => $args{relay_url},
-    on_event  => sub {
+    relay_url          => $args{relay_url},
+    max_message_length => 65_536,
+    on_event           => sub {
       my ($event) = @_;
-      if ($event->kind == 0 + $args{grant_kind}) {
-        _retain_grant(\%retained_grants, $event);
-      }
-      _retain_content(
-        relay              => $relay,
-        retained_content   => \@retained_content,
-        max_content_events => $args{max_content_events},
-        grant_kind         => 0 + $args{grant_kind},
-        event              => $event,
-      );
       return _authorize_event(
         relay            => $relay,
         relay_url        => $args{relay_url},
         grant_kind       => 0 + $args{grant_kind},
         snapshot_signers => $snapshot_signers,
-        retained_grants  => \%retained_grants,
+        now              => $relay->{authority_admission_time} // $clock->(),
         event            => $event,
       );
     },
@@ -84,8 +63,25 @@ sub build_authoritative_relay {
     $relay_args{store} = Overnet::Relay::Store::File->new(path => $args{store_file},);
   }
 
-  $relay = Net::Nostr::Relay->new(%relay_args);
-  return $relay;
+  $relay_args{store} //= Overnet::Relay::Store->new;
+  $relay                         = Overnet::Authority::HostedChannel::Transport->new(%relay_args);
+  $relay->{authority_grant_kind} = 0 + $args{grant_kind};
+  $relay->{authority_clock}      = $clock;
+  my @retained_content = map { $_->id }
+    reverse grep { !is_authoritative_kind($_->kind, $args{grant_kind}) } @{$relay->store->all_events || []};
+  $relay->{authority_on_stored} = sub {
+    my ($event) = @_;
+    _retain_content(
+      relay              => $relay,
+      retained_content   => \@retained_content,
+      max_content_events => $args{max_content_events},
+      grant_kind         => $args{grant_kind},
+      event              => $event
+    );
+  };
+  my $result = $relay;
+  weaken($relay);
+  return $result;
 }
 
 sub _snapshot_signer_set {
@@ -245,13 +241,19 @@ sub _delegated_context {
     return _rejected_context('unauthorized: authority signer must differ from the effective actor');
   }
 
+  if (!defined($tags{overnet_sequence})
+    || ref($tags{overnet_sequence})
+    || $tags{overnet_sequence} !~ /\A[1-9][0-9]*\z/mxs) {
+    return _rejected_context('invalid: delegated control requires a positive overnet_sequence');
+  }
+
   return {
     control_event    => 1,
     relay            => $args{relay},
     relay_url        => $args{relay_url},
     grant_kind       => $args{grant_kind},
     snapshot_signers => $args{snapshot_signers},
-    retained_grants  => $args{retained_grants},
+    now              => $args{now},
     event            => $event,
     kind             => $event->kind,
     group_id         => $args{group_id},
@@ -263,7 +265,7 @@ sub _delegated_context {
 # True for any event authorization reads, and so for any event that must never
 # be evicted: the group events state is derived from, the snapshots, and the
 # delegation grants control events are resolved against.
-sub _is_authoritative_kind {
+sub is_authoritative_kind {
   my ($kind, $grant_kind) = @_;
   return 1 if $GROUP_EVENT_KIND{$kind};
   return 1 if $GROUP_SNAPSHOT_KIND{$kind};
@@ -281,7 +283,7 @@ sub _is_authoritative_kind {
 # destroy derived group state -- membership, operator rights, or the group's
 # existence -- turning ordinary chat volume into an authority outage, which is
 # precisely what tombstone-squat attacks try to manufacture. So the eviction
-# queue only ever receives kinds _is_authoritative_kind rejects, and eviction
+# queue only ever receives kinds is_authoritative_kind rejects, and eviction
 # can therefore never change any authorization decision.
 #
 # The queue holds ids, not events, and evicts by id, so it stays O(1) per event
@@ -290,14 +292,13 @@ sub _retain_content {
   my (%args) = @_;
   my $max = $args{max_content_events};
   return 0 if !defined $max;
-  return 0 if _is_authoritative_kind($args{event}->kind, $args{grant_kind});
+  return 0 if is_authoritative_kind($args{event}->kind, $args{grant_kind});
 
   my $retained = $args{retained_content};
   push @{$retained}, $args{event}->id;
 
-  # One over the budget is correct here: this runs before the relay stores the
-  # event being authorized, so evicting down to $max now leaves $max once it
-  # lands.
+  # Retention runs only after successful admission and storage. Rejected and
+  # duplicate publications must not evict accepted history.
   while (@{$retained} > $max) {
     my $evicted = shift @{$retained};
     if ($args{relay} && $args{relay}->store) {
@@ -308,32 +309,9 @@ sub _retain_content {
   return 1;
 }
 
-sub _retain_grant {
-  my ($retained_grants, $grant) = @_;
-
-  # Prune only grants that are expired against both the wall clock and the
-  # incoming event's logical time, so a forged future created_at cannot
-  # evict live grants and replayed histories keep their grant index.
-  my $prune_before = time;
-  if ($grant->created_at < $prune_before) {
-    $prune_before = $grant->created_at;
-  }
-  for my $grant_id (keys %{$retained_grants}) {
-    my %tags       = _first_tag_values($retained_grants->{$grant_id}->tags);
-    my $expires_at = $tags{expires_at};
-    if (defined $expires_at && !ref($expires_at) && $expires_at =~ /\A\d+\z/mxs && $expires_at < $prune_before) {
-      delete $retained_grants->{$grant_id};
-    }
-  }
-
-  $retained_grants->{$grant->id} = $grant;
-  return 1;
-}
-
 sub _verify_delegation_grant {
   my ($context) = @_;
-  my $grant = ($context->{retained_grants} || {})->{$context->{authority_id}}
-    || $context->{relay}->store->get_by_id($context->{authority_id});
+  my $grant = $context->{relay}->store->get_by_id($context->{authority_id});
   if (!$grant) {
     return 'unauthorized: delegation grant is not known to this relay';
   }
@@ -343,6 +321,7 @@ sub _verify_delegation_grant {
     actor_pubkey => $context->{actor_pubkey},
     relay_url    => $context->{relay_url},
     grant_kind   => $context->{grant_kind},
+    now          => $context->{now},
   );
   if (!$validation->{valid}) {
     return 'unauthorized: ' . $validation->{reason};
@@ -683,7 +662,7 @@ sub _add_default_member {
 
 sub _member_tag_pubkey_and_roles {
   my ($tag) = @_;
-  if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2 && ($tag->[0] || q{}) eq 'p')) {
+  if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1 && ($tag->[0] || q{}) eq 'p')) {
     return;
   }
   if (!_valid_pubkey($tag->[1])) {
@@ -844,8 +823,7 @@ sub _group_events {
     }
   }
 
-  my @ordered = sort { _compare_group_events($a, $b) } @events;
-  return @ordered;
+  return @{Overnet::Authority::HostedChannel::ordered_events(\@events, snapshot_signers => $snapshot_signers)};
 }
 
 # The events worth asking _event_belongs_to_group about for this group.
@@ -927,78 +905,6 @@ sub _event_has_delegation_shape {
     && $event->pubkey ne $tags{overnet_actor} ? 1 : 0;
 }
 
-sub _compare_group_events {
-  my ($first_event, $second_event) = @_;
-  my $created_order = $first_event->created_at <=> $second_event->created_at;
-  if ($created_order) {
-    return $created_order;
-  }
-
-  # Preserve explicit per-session causal order only when it actually
-  # distinguishes the two events; an equal (or absent) sequence must fall
-  # through to the semantic phase and event-id tie-breaks below.
-  my $sequence_order = _compare_event_sequence_for_sort($first_event, $second_event);
-  if ($sequence_order) {
-    return $sequence_order;
-  }
-
-  my $rank_order = _event_sort_rank($first_event) <=> _event_sort_rank($second_event);
-  if ($rank_order) {
-    return $rank_order;
-  }
-
-  # irc.md section 11.4: remaining ties MUST break by ascending lowercase Nostr
-  # event id, never by raw local input position.
-  return lc($first_event->id) cmp lc($second_event->id);
-}
-
-sub _compare_event_sequence_for_sort {
-  my ($first_event, $second_event) = @_;
-  my $first_sequence  = _event_sequence_for_sort($first_event);
-  my $second_sequence = _event_sequence_for_sort($second_event);
-  if (!(defined $first_sequence && defined $second_sequence)) {
-    return;
-  }
-
-  my $first_authority  = _event_authority_for_sort($first_event)  || q{};
-  my $second_authority = _event_authority_for_sort($second_event) || q{};
-  if ($first_authority ne $second_authority) {
-    return;
-  }
-
-  return $first_sequence <=> $second_sequence;
-}
-
-sub _event_authority_for_sort {
-  my ($event) = @_;
-  my %tags = _first_tag_values($event->tags);
-  if ( defined $tags{overnet_authority}
-    && !ref($tags{overnet_authority})
-    && $tags{overnet_authority} =~ /\A[0-9a-f]{64}\z/mxs) {
-    return $tags{overnet_authority};
-  }
-  return;
-}
-
-sub _event_sequence_for_sort {
-  my ($event) = @_;
-  my %tags = _first_tag_values($event->tags);
-  if ( defined $tags{overnet_sequence}
-    && !ref($tags{overnet_sequence})
-    && $tags{overnet_sequence} =~ /\A[1-9]\d*\z/mxs) {
-    return 0 + $tags{overnet_sequence};
-  }
-  return;
-}
-
-sub _event_sort_rank {
-  my ($event) = @_;
-  if (exists $EVENT_SORT_RANK{$event->kind}) {
-    return $EVENT_SORT_RANK{$event->kind};
-  }
-  return 99;
-}
-
 sub _metadata_from_tags {
   my ($tags) = @_;
   my %metadata = (
@@ -1074,7 +980,7 @@ sub _target_and_roles_from_put_user {
   my ($tags) = @_;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2 && ($tag->[0] || q{}) eq 'p')) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1 && ($tag->[0] || q{}) eq 'p')) {
       next;
     }
     my $pubkey = $tag->[1];
@@ -1091,7 +997,7 @@ sub _target_pubkey_from_tags {
   my ($tags) = @_;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2 && ($tag->[0] || q{}) eq 'p')) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1 && ($tag->[0] || q{}) eq 'p')) {
       next;
     }
     return $tag->[1];
@@ -1106,7 +1012,7 @@ sub _invite_from_tags {
   my $target_pubkey;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     my $tag_name = $tag->[0] || q{};
@@ -1126,7 +1032,7 @@ sub _first_tag_values {
   my %values;
 
   for my $tag (@{$tags || []}) {
-    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 2)) {
+    if (!(ref($tag) eq 'ARRAY' && @{$tag} >= 1)) {
       next;
     }
     if (exists $values{$tag->[0]}) {
@@ -1192,6 +1098,10 @@ C<overnet_irc_mask>. The authoritative, non-evadable exclusion mechanism
 remains C<9001> pubkey removal on a C<closed> channel.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 is_authoritative_kind
+
+Returns whether the kind belongs to hosted-channel authority history.
 
 =head2 build_authoritative_relay
 

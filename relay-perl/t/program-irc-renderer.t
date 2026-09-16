@@ -1,9 +1,12 @@
 use strictures 2;
-use Test::More;
 use File::Spec;
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
+use Test::More;
 
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib');
+use lib File::Spec->catdir(IRC_SERVER_ROOT, 'lib');
 
 use_ok('Overnet::Program::IRC::Renderer');
 
@@ -209,7 +212,7 @@ is(
 );
 
 my $server_path =
-  File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',);
+  File::Spec->catfile(IRC_SERVER_ROOT, 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',);
 open my $server_fh, '<', $server_path
   or die "Unable to read $server_path: $!";
 my $server_source = do { local $/ = undef; <$server_fh> };

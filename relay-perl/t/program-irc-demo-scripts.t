@@ -1,10 +1,13 @@
 use strictures 2;
-use Test2::V0;
 use File::Spec;
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
+use Test2::V0;
 
 my $perl         = $^X;
-my $program_repo = File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server');
+my $program_repo = File::Spec->catdir(IRC_SERVER_ROOT);
 my $command      = File::Spec->catfile($program_repo, 'bin', 'overnet-irc-server');
 my $local_server_module =
   File::Spec->catfile($program_repo, 'lib', 'Overnet', 'Program', 'IRC', 'Script', 'LocalServer.pm');

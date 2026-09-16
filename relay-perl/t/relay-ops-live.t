@@ -316,7 +316,7 @@ subtest 'relay enforces closed publish and object-read service policies' => sub 
     my $response = _http_request(
       port    => $port,
       request => join("\r\n",
-        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23ops HTTP/1.1',
+        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23ops&author=' . ('a' x 64) . ' HTTP/1.1',
         'Host: 127.0.0.1',
         'Connection: close',
         '', '',),

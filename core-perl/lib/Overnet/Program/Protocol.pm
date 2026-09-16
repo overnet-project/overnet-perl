@@ -5,7 +5,10 @@ use Moo;
 use Carp       qw(croak);
 use English    qw(-no_match_vars);
 use JSON       ();
+use B          ();
 use List::Util qw(any);
+
+use Overnet::Core::JSON ();
 
 our $VERSION = '0.001';
 my $JSON                         = JSON->new->utf8->canonical;
@@ -147,7 +150,7 @@ sub validate_message {
   _assert_message_object($message);
 
   my $type = $message->{type};
-  if (!(defined $type && !ref($type) && length($type))) {
+  if (!(_is_non_empty_string($type))) {
     return (0, 'protocol.invalid_message', 'Message type is required');
   }
   if (!($VALID_MESSAGE_TYPES{$type})) {
@@ -375,7 +378,7 @@ sub feed {
       croak "Protocol framing error: missing length prefix\n";
     }
 
-    if ($prefix !~ /\A\d+\z/mxs) {
+    if ($prefix !~ /\A[0-9]+\z/mxs) {
       croak "Protocol framing error: non-numeric length prefix\n";
     }
 
@@ -417,7 +420,7 @@ sub finish {
     croak "Protocol framing error: missing length prefix\n";
   }
 
-  if ($prefix !~ /\A\d+\z/mxs) {
+  if ($prefix !~ /\A[0-9]+\z/mxs) {
     croak "Protocol framing error: non-numeric length prefix\n";
   }
 
@@ -440,7 +443,7 @@ sub _decode_payload {
 
   my $decoded;
   eval {
-    $decoded = JSON->new->utf8->decode($payload);
+    $decoded = Overnet::Core::JSON::decode_json($payload);
     1;
   } or do {
     my $err = $EVAL_ERROR || 'unknown error';
@@ -468,10 +471,10 @@ sub _assert_message_object {
 sub _validate_request {
   my ($message) = @_;
 
-  if (!(defined $message->{id} && !ref($message->{id}) && length($message->{id}))) {
+  if (!(_is_non_empty_string($message->{id}))) {
     return (0, 'protocol.invalid_message', 'Request id is required');
   }
-  if (!(defined $message->{method} && !ref($message->{method}) && length($message->{method}))) {
+  if (!(_is_non_empty_string($message->{method}))) {
     return (0, 'protocol.invalid_message', 'Request method is required');
   }
   if (exists $message->{params} && ref($message->{params}) ne 'HASH') {
@@ -495,7 +498,7 @@ sub _validate_request {
 sub _validate_response {
   my ($message) = @_;
 
-  if (!(defined $message->{id} && !ref($message->{id}) && length($message->{id}))) {
+  if (!(_is_non_empty_string($message->{id}))) {
     return (0, 'protocol.invalid_message', 'Response id is required');
   }
   if (!(exists $message->{ok})) {
@@ -518,11 +521,10 @@ sub _validate_response {
     if (!(ref($message->{error}) eq 'HASH')) {
       return (0, 'protocol.invalid_message', 'Error response must include error object');
     }
-    if (!(defined $message->{error}{code} && !ref($message->{error}{code}) && length($message->{error}{code}))) {
+    if (!(_is_non_empty_string($message->{error}{code}))) {
       return (0, 'protocol.invalid_message', 'Error response code is required');
     }
-    if (!(defined $message->{error}{message} && !ref($message->{error}{message}) && length($message->{error}{message})))
-    {
+    if (!(_is_non_empty_string($message->{error}{message}))) {
       return (0, 'protocol.invalid_message', 'Error response message is required');
     }
     if (exists $message->{error}{details}
@@ -537,7 +539,7 @@ sub _validate_response {
 sub _validate_notification {
   my ($message) = @_;
 
-  if (!(defined $message->{method} && !ref($message->{method}) && length($message->{method}))) {
+  if (!(_is_non_empty_string($message->{method}))) {
     return (0, 'protocol.invalid_message', 'Notification method is required');
   }
   if (exists $message->{id}) {
@@ -735,7 +737,7 @@ sub _validate_runtime_init_request {
   if (!(_is_non_empty_string($params->{program_id}))) {
     return (0, 'protocol.invalid_params', 'runtime.init params.program_id is required');
   }
-  if (!(ref($params->{permissions}) eq 'ARRAY' && !any { !defined || ref || !length } @{$params->{permissions}})) {
+  if (!(ref($params->{permissions}) eq 'ARRAY' && !any { !_is_non_empty_string($_) } @{$params->{permissions}})) {
     return (0, 'protocol.invalid_params', 'runtime.init params.permissions must be an array of strings');
   }
   if (!(ref($params->{config}) eq 'HASH')) {
@@ -762,7 +764,11 @@ sub _validate_runtime_shutdown_request {
 
 sub _is_non_empty_string {
   my ($value) = @_;
-  return defined $value && !ref($value) && length($value) ? 1 : 0;
+  return
+       defined $value
+    && !ref($value)
+    && (B::svref_2object(\$value)->FLAGS & B::SVp_POK())
+    && length($value) ? 1 : 0;
 }
 
 sub _is_non_empty_string_array {
@@ -782,13 +788,17 @@ sub _is_non_empty_string_array {
 
 sub _is_integer {
   my ($value) = @_;
-  return defined $value && !ref($value) && $value =~ /\A-?\d+\z/mxs ? 1 : 0;
+  return
+       defined $value
+    && !ref($value)
+    && (B::svref_2object(\$value)->FLAGS & (B::SVp_IOK() | B::SVp_NOK()))
+    && $value =~ /\A-?[0-9]+\z/mxs ? 1 : 0;
 }
 
 sub _require_string_field {
   my (%args) = @_;
   my ($name, $value) = each %args;
-  if (!(defined $value && !ref($value) && length($value))) {
+  if (!_is_non_empty_string($value)) {
     croak "$name is required\n";
   }
   return;
@@ -800,7 +810,7 @@ sub _require_string_field_optional {
   if (!(defined $value)) {
     return;
   }
-  if (ref($value) || !length($value)) {
+  if (!_is_non_empty_string($value)) {
     croak "$name must be a non-empty string\n";
   }
   return;
@@ -852,7 +862,7 @@ sub _require_string_array_field {
     croak "$name must be an array of strings\n";
   }
   for my $item (@{$value}) {
-    if (!defined($item) || ref($item) || !length($item)) {
+    if (!_is_non_empty_string($item)) {
       croak "$name must be an array of strings\n";
     }
   }

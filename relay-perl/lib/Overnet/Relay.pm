@@ -4,9 +4,12 @@ use strictures 2;
 use Moo;
 
 use AnyEvent;
-use Carp        qw(croak);
-use English     qw(-no_match_vars);
-use JSON        ();
+use Carp    qw(croak);
+use English qw(-no_match_vars);
+use JSON    ();
+use Encode  qw(decode FB_CROAK LEAVE_SRC);
+use Overnet::Relay::Store;
+use Overnet::Relay::Connection;
 use Socket      qw(MSG_PEEK);
 use URI::Escape qw(uri_unescape);
 
@@ -97,6 +100,7 @@ around new => sub {
   $overnet_args{profile_contract_policy} = $overnet_args{_profile_contract_index}->policy;
   $overnet_args{profile_contracts}       = $overnet_args{_profile_contract_index}->contracts;
 
+  $args{store} //= Overnet::Relay::Store->new(defined $args{max_events} ? (max_events => $args{max_events}) : (),);
   my $self = $class->SUPER::new(\%args);
   for my $field (@OVERNET_RELAY_FIELDS) {
     $self->$field($overnet_args{$field});
@@ -131,6 +135,17 @@ sub _apply_profile_limit_defaults {
 }
 
 no Moo;
+
+sub _on_connection {
+  my ($self, $connection, $peer_host) = @_;
+  return $self->SUPER::_on_connection(
+    Overnet::Relay::Connection->new(
+      connection         => $connection,
+      max_message_length => $self->max_message_length,
+    ),
+    $peer_host
+  );
+}
 
 sub _constructor_args_hash {
   my (@args) = @_;
@@ -180,8 +195,9 @@ sub _build_relay_info_document {
       core_version  => $self->core_version,
       relay_profile => $self->relay_profile,
       capabilities  => [
-        'overnet.events.publish', 'overnet.events.query', 'overnet.events.subscribe', 'overnet.events.sync',
-        'overnet.objects.read',
+        'overnet.events.publish',   'overnet.events.query',
+        'overnet.events.subscribe', 'overnet.events.sync',
+        ($self->_has_object_evidence ? ('overnet.objects.read') : ()),
       ],
       limits           => $limits,
       service_policies => $self->service_policies,
@@ -287,6 +303,31 @@ sub _finish_http_request {
   return $closed ? 1 : 0;
 }
 
+sub _has_object_evidence {
+  my ($self) = @_;
+  return $self->store->can('discarded_state') && $self->store->can('discarded_removal');
+}
+
+sub broadcast {
+  my ($self, $event) = @_;
+  for my $conn_id (keys %{$self->_subscriptions || {}}) {
+    my $policy = $self->_service_rejection('subscribe', $conn_id);
+    next if !$policy;
+    for my $sub_id (keys %{$self->_subscriptions->{$conn_id}}) {
+      $self->_handle_close($conn_id, $sub_id);
+      my $conn = $self->_connections->{$conn_id} or next;
+      $conn->send(
+        Net::Nostr::Message->new(
+          type            => 'CLOSED',
+          subscription_id => $sub_id,
+          message         => "$policy: subscription is restricted by service policy"
+        )->serialize
+      );
+    }
+  }
+  return $self->SUPER::broadcast($event);
+}
+
 sub _handle_object_http_request {
   my ($self, $method, $path) = @_;
 
@@ -302,77 +343,123 @@ sub _handle_object_http_request {
     );
   }
 
-  my (undef, $query_string) = split /\?/mxs, $path, 2;
-  my %query = _decode_query_string($query_string // q{});
+  my $query = _object_query($path);
+  return _object_error('invalid', 'Exactly one valid type, id and author are required') if !$query;
+  my %query  = %{$query};
+  my $policy = $self->_service_rejection('object_read');
+  return _object_error($policy, 'Object read is restricted by service policy') if $policy;
 
-  my $object_type = $query{type};
-  my $object_id   = $query{id};
+  return _object_error('unavailable', 'Store cannot track discarded evidence')
+    if !$self->_has_object_evidence;
 
-  if (!defined $object_type
-    || ref($object_type)
-    || $object_type eq q{}
-    || !defined $object_id
-    || ref($object_id)
-    || $object_id eq q{}) {
-    return _http_json_response(
-      status_line => 'HTTP/1.1 400 Bad Request',
-      body        => {
-        error => {
-          code    => 'invalid',
-          message => 'type and id query parameters are required',
-        },
-      },
-    );
-  }
-
-  my $state_event = $self->_latest_matching_event(
-    kinds       => [37_800],
-    object_type => $object_type,
-    object_id   => $object_id,
+  my @reference = @query{qw(type id author)};
+  my $states    = $self->store->query(
+    [
+      Net::Nostr::Filter->new(
+        kinds          => [37_800],
+        authors        => [$query{author}],
+        '#overnet_ot'  => [$query{type}],
+        '#overnet_oid' => [$query{id}],
+      )
+    ]
   );
-  my $removal_event = $self->_latest_matching_event(
-    kinds       => [7_801],
-    object_type => $object_type,
-    object_id   => $object_id,
-  );
+  my ($state) = grep { Overnet::Core::Validator::validate($_->to_hash)->{valid} }
+    sort { -($a->created_at <=> $b->created_at) || $a->id cmp $b->id } @{$states};
+  my $discarded = $self->store->can('discarded_state') ? $self->store->discarded_state(@reference) : undef;
 
-  if (!$state_event && !$removal_event) {
-    return _http_json_response(
-      status_line => 'HTTP/1.1 404 Not Found',
-      body        => {
-        error => {
-          code    => 'not_found',
-          message => 'No visible object found for the requested reference',
-        },
-      },
-    );
+  if (
+    $discarded
+    && (!$state
+      || $discarded->{created_at} > $state->created_at
+      || ($discarded->{created_at} == $state->created_at && $discarded->{id} lt $state->id))
+  ) {
+    return _object_error('unavailable', 'Required state evidence has been discarded');
   }
+  return _object_error('not_found',     'No state is retained for the requested author and object') if !$state;
+  return _object_error('policy_denied', 'State is not visible') if !$self->_can_read('http', $state);
 
+  my ($removal, $error) = $self->_object_removal($state, \%query);
+  return $error if $error;
   return _http_json_response(
     status_line => 'HTTP/1.1 200 OK',
     body        => {
-      object_type   => $object_type,
-      object_id     => $object_id,
-      removed       => _object_is_removed($state_event, $removal_event) ? JSON::true              : JSON::false,
-      state_event   => $state_event                                     ? $state_event->to_hash   : undef,
-      removal_event => $removal_event                                   ? $removal_event->to_hash : undef,
-    },
+      object_type   => $query{type},
+      object_id     => $query{id},
+      author        => $query{author},
+      removed       => $removal ? JSON::true        : JSON::false,
+      state_event   => $removal ? undef             : $state->to_hash,
+      removal_event => $removal ? $removal->to_hash : undef,
+    }
   );
 }
 
-sub _latest_matching_event {
-  my ($self, %args) = @_;
-  my $results = $self->store->query(
+sub _object_removal {
+  my ($self, $state, $query) = @_;
+  my $removals = $self->store->query(
     [
       Net::Nostr::Filter->new(
-        kinds          => $args{kinds},
-        '#overnet_ot'  => [$args{object_type}],
-        '#overnet_oid' => [$args{object_id}],
-      ),
+        kinds          => [7801],
+        '#e'           => [$state->id],
+        '#overnet_ot'  => [$query->{type}],
+        '#overnet_oid' => [$query->{id}],
+      )
     ]
   );
+  my $removal;
+  my $unresolved = 0;
+  for my $candidate (sort { -($a->created_at <=> $b->created_at) || $a->id cmp $b->id } @{$removals}) {
+    my $context = $self->_overnet_validation_context($candidate);
+    my $result  = Overnet::Core::Validator::validate($candidate->to_hash, $context);
+    if (!$result->{valid}) {
+      if ( $context->{trusted_acceptance}
+        || $result->{reason} =~ /requires.*context|expired|clock/mxs) {
+        $unresolved = 1;
+      }
+      next;
+    }
+    return (undef, _object_error('policy_denied', 'Removal evidence is not visible'))
+      if !$self->_can_read('http', $candidate);
+    $removal = $candidate;
+    last;
+  }
+  if (!$removal
+    && ($unresolved || ($self->store->can('discarded_removal') && $self->store->discarded_removal($state->id)))) {
+    return (undef, _object_error('unavailable', 'Required removal evidence is unavailable'));
+  }
+  return ($removal, undef);
+}
 
-  return @{$results} ? $results->[0] : undef;
+sub _object_query {
+  my ($path) = @_;
+  my (undef, $query_string) = split /\?/mxs, $path, 2;
+  my %query;
+  my $parsed = eval { %query = _decode_query_string($query_string // q{}); 1; };
+  if ( !$parsed
+    || !defined $query{type}
+    || !length $query{type}
+    || !defined $query{id}
+    || !length $query{id}
+    || !defined $query{author}
+    || $query{author} !~ /\A[0-9a-f]{64}\z/mxs) {
+    return;
+  }
+  return \%query;
+}
+
+sub _object_error {
+  my ($code, $message) = @_;
+  my %status = (
+    invalid          => '400 Bad Request',
+    unauthorized     => '401 Unauthorized',
+    payment_required => '402 Payment Required',
+    policy_denied    => '403 Forbidden',
+    not_found        => '404 Not Found',
+    unavailable      => '503 Service Unavailable',
+  );
+  return _http_json_response(
+    status_line => 'HTTP/1.1 ' . $status{$code},
+    body        => {error => {code => $code, message => $message}}
+  );
 }
 
 sub _handle_event {
@@ -410,6 +497,7 @@ sub accept_synced_event {
 
 sub _accept_overnet_event {
   my ($self, $event, %opts) = @_;
+  local $self->{_admission_time} = time;    ## no critic (Variables::ProhibitLocalVars) -- Bind one trusted clock reading for nested authorization.
 
   my $rejection = $self->_pre_store_rejection($event, \%opts);
   if (defined $rejection) {
@@ -435,7 +523,7 @@ sub _accept_overnet_event {
     return _event_result($event, accepted => 1, stored => 0, message => $addressable_message);
   }
 
-  $self->store->store($event);
+  $self->store->store($event, $self->{_admission_time});
   if ($opts{broadcast}) {
     $self->broadcast($event);
   }
@@ -455,6 +543,8 @@ sub _event_result {
 
 sub _pre_store_rejection {
   my ($self, $event, $opts) = @_;
+  my $policy = $self->_service_rejection('publish', $opts->{conn_id});
+  return "$policy: publication is restricted by service policy" if $policy;
 
   my $message = $self->_basic_publish_rejection($event);
   if (defined $message) {
@@ -505,6 +595,9 @@ sub _basic_publish_rejection {
 
   if (defined $self->max_content_length && length($event->content) > $self->max_content_length) {
     return 'invalid: content too long';
+  }
+  if (defined $self->max_message_length && length($JSON->encode($event->to_hash)) > $self->max_message_length) {
+    return 'invalid: event too large';
   }
 
   if (defined $self->max_event_tags && scalar(@{$event->_tags}) > $self->max_event_tags) {
@@ -646,7 +739,19 @@ sub _addressable_conflict_message {
 
 sub _handle_req {
   my ($self, $conn_id, $sub_id, @filters) = @_;
-  my $conn = $self->_connections->{$conn_id};
+  my $conn   = $self->_connections->{$conn_id};
+  my $policy = $self->_service_rejection('query', $conn_id)
+    || $self->_service_rejection('subscribe', $conn_id);
+  if ($policy) {
+    $conn->send(
+      Net::Nostr::Message->new(
+        type            => 'CLOSED',
+        subscription_id => $sub_id,
+        message         => "$policy: query or subscription is restricted by service policy"
+      )->serialize
+    );
+    return;
+  }
 
   if (defined $self->max_filters && @filters > $self->max_filters) {
     $conn->send(
@@ -692,8 +797,8 @@ sub _handle_req {
   $self->_subscriptions->{$conn_id}{$sub_id} = \@filters;
   $self->_add_to_sub_index($conn_id, $sub_id, \@filters);
 
-  my $results = $self->store->query(\@filters);
-  for my $event (@{$results}) {
+  my ($results) = $self->_query_visible($conn_id, \@filters);
+  for my $event (sort { $a->created_at <=> $b->created_at || $a->id cmp $b->id } @{$results}) {
     $conn->send(
       Net::Nostr::Message->new(
         type            => 'EVENT',
@@ -716,6 +821,17 @@ sub _handle_neg_open {
   my ($self, $conn_id, $msg) = @_;
   my $conn   = $self->_connections->{$conn_id};
   my $sub_id = $msg->subscription_id;
+  my $policy = $self->_service_rejection('sync', $conn_id);
+  if ($policy) {
+    $conn->send(
+      Net::Nostr::Message->new(
+        type            => 'NEG-ERR',
+        subscription_id => $sub_id,
+        message         => "$policy: synchronization is restricted by service policy"
+      )->serialize
+    );
+    return;
+  }
 
   my $sessions = $self->_neg_sessions->{$conn_id} ||= {};
   if (!exists $sessions->{$sub_id}
@@ -736,8 +852,8 @@ sub _handle_neg_open {
   delete $filter_hash->{limit};
   my $unlimited_filter = Net::Nostr::Filter->new(%{$filter_hash});
 
-  my $ne     = Net::Nostr::Negentropy->new;
-  my $events = $self->store->query([$unlimited_filter]);
+  my $ne = Net::Nostr::Negentropy->new;
+  my ($events) = $self->_query_visible($conn_id, [$unlimited_filter], 1);
   for my $ev (@{$events}) {
     $ne->add_item($ev->created_at, $ev->id);
   }
@@ -786,6 +902,37 @@ sub _handle_neg_open {
   return;
 }
 
+sub _handle_count {
+  my ($self, $conn_id, $sub_id, @filters) = @_;
+  if (my $policy = $self->_service_rejection('query', $conn_id)) {
+    $self->_connections->{$conn_id}->send(
+      Net::Nostr::Message->new(
+        type            => 'CLOSED',
+        subscription_id => $sub_id,
+        message         => "$policy: query is restricted by service policy"
+      )->serialize
+    );
+    return;
+  }
+  return $self->SUPER::_handle_count($conn_id, $sub_id, @filters);
+}
+
+sub _handle_neg_msg {
+  my ($self, $conn_id, $msg) = @_;
+  if (my $policy = $self->_service_rejection('sync', $conn_id)) {
+    delete $self->_neg_sessions->{$conn_id}{$msg->subscription_id};
+    $self->_connections->{$conn_id}->send(
+      Net::Nostr::Message->new(
+        type            => 'NEG-ERR',
+        subscription_id => $msg->subscription_id,
+        message         => "$policy: synchronization is restricted by service policy"
+      )->serialize
+    );
+    return;
+  }
+  return $self->SUPER::_handle_neg_msg($conn_id, $msg);
+}
+
 sub _validate_overnet_publish {
   my ($self, $event) = @_;
 
@@ -813,25 +960,40 @@ sub _validate_overnet_publish {
 }
 
 sub _overnet_validation_context {
-  my ($self, $event) = @_;
+  my ($self, $event, $depth) = @_;
+  $depth //= 0;
+  return {} if $depth > 64;
   my %tag_values = _first_tag_values($event->tags);
-  my $context    = {};
-
-  if ($event->kind == 7_801 && defined $tag_values{e}) {
-    my $target_event = $self->store->get_by_id($tag_values{e});
-    if ($target_event) {
-      $context->{target_event} = $target_event->to_hash;
+  my $context    = {now => $self->{_admission_time} // time};
+  if ($self->store->can('acceptance_for')) {
+    $context->{trusted_acceptance} = $self->store->acceptance_for($event->id);
+  }
+  if ($event->kind == 7801 && defined $tag_values{e}) {
+    my $target = $self->store->get_by_id($tag_values{e});
+    if ($target) {
+      $context->{target_event} = $target->to_hash;
+      if ($target->kind == 7801) {
+        $context->{target_context} = $self->_overnet_validation_context($target, $depth + 1);
+      }
     }
-
     if (defined $tag_values{overnet_delegate}) {
-      my $delegation_event = $self->store->get_by_id($tag_values{overnet_delegate});
-      if ($delegation_event) {
-        $context->{delegation_event} = $delegation_event->to_hash;
+      my $grant = $self->store->get_by_id($tag_values{overnet_delegate});
+      if ($grant) {
+        $context->{delegation_event} = $grant->to_hash;
       }
     }
   }
-
   return $context;
+}
+
+sub _service_rejection {
+  my ($self, $service, $conn_id) = @_;
+  my $policy = ($self->service_policies || {})->{$service} // 'closed';
+  return                    if $policy eq 'open';
+  return 'policy_denied'    if $policy eq 'closed';
+  return 'payment_required' if $policy eq 'paid';
+  return                    if defined $conn_id && keys %{($self->_authenticated || {})->{$conn_id} || {}};
+  return 'unauthorized';
 }
 
 sub _mirror_tag_errors {
@@ -916,21 +1078,18 @@ sub _validated_service_policies {
 sub _decode_query_string {
   my ($query_string) = @_;
   my %query;
-  if (!length $query_string) {
-    return %query;
-  }
-
   for my $pair (split /&/mxs, $query_string) {
-    if (!length $pair) {
-      next;
-    }
     my ($key, $value) = split /=/mxs, $pair, 2;
-    if (!defined $key) {
-      next;
+    die "Malformed query parameter\n" if !defined $value;
+    for ($key, $value) {
+      die "Malformed percent encoding\n" if /%(?![0-9a-fA-F]{2})/mxs;
+      tr/+/ /;
+      my $bytes = uri_unescape($_);
+      $_ = decode('UTF-8', $bytes, FB_CROAK | LEAVE_SRC);
     }
-    $query{uri_unescape($key)} = defined $value ? uri_unescape($value) : q{};
+    die "Repeated query parameter\n" if exists $query{$key};
+    $query{$key} = $value;
   }
-
   return %query;
 }
 
@@ -988,17 +1147,6 @@ sub _normalize_outcome_message {
   return $default_prefix . ': ' . $detail;
 }
 
-sub _object_is_removed {
-  my ($state_event, $removal_event) = @_;
-  if (!$removal_event) {
-    return 0;
-  }
-  if (!$state_event) {
-    return 1;
-  }
-  return _is_newer_event($removal_event, $state_event) ? 1 : 0;
-}
-
 sub _is_newer_event {
   my ($new, $existing) = @_;
   if ($new->created_at > $existing->created_at) {
@@ -1049,6 +1197,10 @@ relay-to-relay sync ingestion behavior to L<Net::Nostr::Relay>.
 =head2 new
 
 Creates an Overnet relay.
+
+=head2 broadcast
+
+Publishes to currently permitted subscriptions, closing those no longer allowed.
 
 =head2 accept_synced_event
 

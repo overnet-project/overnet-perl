@@ -1,7 +1,8 @@
 package Overnet::Core::Provenance;
 
 use strictures 2;
-use JSON ();
+use Overnet::Core::JSON ();
+use JSON                ();
 
 our $VERSION = '0.001';
 
@@ -69,7 +70,7 @@ sub _decode_content {
     return;
   }
   my $decoded;
-  my $ok = eval { $decoded = $JSON->decode($content); 1 };
+  my $ok = eval { $decoded = Overnet::Core::JSON::decode_json($content); 1 };
   return $ok ? $decoded : undef;
 }
 

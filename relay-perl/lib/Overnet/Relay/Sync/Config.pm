@@ -1,6 +1,7 @@
 package Overnet::Relay::Sync::Config;
 
 use strictures 2;
+use Overnet::Core::JSON ();
 
 use Carp    qw(croak);
 use English qw(-no_match_vars);
@@ -29,7 +30,7 @@ sub load_file {
 
   my $data;
   my $decoded = eval {
-    $data = $JSON->decode($raw);
+    $data = Overnet::Core::JSON::decode_json($raw);
     1;
   };
   if (!$decoded) {

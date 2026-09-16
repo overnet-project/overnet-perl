@@ -11,8 +11,9 @@ use Overnet::Auth::SocketIO;
 
 our $VERSION = '0.001';
 
-has agent    => (is => 'ro', reader => '_agent');
-has protocol => (is => 'ro', reader => '_protocol');
+has agent           => (is => 'ro', reader => '_agent');
+has caller_resolver => (is => 'ro', reader => '_caller_resolver');
+has protocol        => (is => 'ro', reader => '_protocol');
 
 no Moo;
 
@@ -24,8 +25,9 @@ sub BUILDARGS {
   }
 
   return {
-    agent    => $args{agent},
-    protocol => $args{protocol} || Overnet::Program::Protocol->new,
+    agent           => $args{agent},
+    caller_resolver => $args{caller_resolver},
+    protocol        => $args{protocol} || Overnet::Program::Protocol->new,
   };
 }
 
@@ -42,6 +44,7 @@ sub serve_socket {
     croak "socket is required\n";
   }
 
+  my $caller = ref($self->{caller_resolver}) eq 'CODE' ? $self->{caller_resolver}->($socket) : {};
   my $reader = Overnet::Program::Protocol->new(max_frame_size => $self->{protocol}->max_frame_size,);
 
   while (1) {
@@ -56,7 +59,12 @@ sub serve_socket {
 
     my $messages = $reader->feed($chunk);
     for my $message (@{$messages}) {
-      my $response = $self->{agent}->dispatch($message);
+      croak "auth-agent expects a request\n" if ($message->{type} || q{}) ne 'request';
+      my ($valid, $code, $reason) = $reader->validate_message($message);
+
+      # Auth defines its own method family; all shared envelope checks still apply.
+      croak "$code: $reason\n" if !$valid && $code ne 'protocol.unknown_method';
+      my $response = $self->{agent}->dispatch($message, caller => $caller);
       my $frame    = $self->{protocol}->encode_message($response);
       _write_all($socket, $frame);
       return 1;
@@ -102,7 +110,11 @@ Public API entry point.
 
 =head2 serve_socket
 
-Public API entry point.
+Handles one framed request. Optional constructor C<caller_resolver> receives
+only the connected socket, before reading request content, and returns trusted
+C<program_id> / C<admin> context for the agent. The host must verify the platform
+identity or ownership of an inherited launch channel; matching Unix UID alone
+is insufficient. No resolver means an unverified caller, never an administrator.
 
 =head1 DIAGNOSTICS
 

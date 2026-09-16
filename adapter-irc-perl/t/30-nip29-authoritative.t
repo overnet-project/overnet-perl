@@ -11,6 +11,8 @@ my $adapter = Overnet::Adapter::IRC->new;
 sub _authority_config {
   return {
     authority_profile => 'nip29',
+    snapshot_pubkeys => [map { $_ x 64 } qw(a b c d e f)],
+
     group_host        => 'groups.example.test',
     channel_groups    => {
       '#overnet' => 'overnet',
@@ -21,6 +23,8 @@ sub _authority_config {
 sub _dynamic_authority_config {
   return {
     authority_profile => 'nip29',
+    snapshot_pubkeys => [map { $_ x 64 } qw(a b c d e f)],
+
     group_host        => 'groups.example.test',
   };
 }
@@ -3546,6 +3550,7 @@ subtest 'a duplicated d tag resolves the group id from the first d tag, not a la
     authority_profile => 'nip29',
     group_host        => 'groups.example.test',
     channel_groups    => {'#zero' => '0'},
+    snapshot_pubkeys => ['f' x 64],
   };
   # Raw kind 39000 metadata event carrying two d tags; the first ('0') is the
   # bound group id. group id resolution must keep the FIRST d tag (//=), so this

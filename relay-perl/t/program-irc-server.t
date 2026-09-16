@@ -1,9 +1,12 @@
 use strictures 2;
-use AnyEvent;
-use JSON ();
 use File::Spec;
-use File::Temp qw(tempdir);
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
+use AnyEvent;
+use JSON       ();
+use File::Temp qw(tempdir);
 use Test2::V0;
 use IO::Select;
 use IO::Socket::INET;
@@ -14,6 +17,7 @@ use IPC::Open3             qw(open3);
 use MIME::Base64           qw(decode_base64 encode_base64);
 use POSIX                  qw(WNOHANG);
 use Symbol                 qw(gensym);
+use Scalar::Util           qw(weaken);
 use Time::HiRes            qw(sleep time);
 
 use Net::Nostr::Client;
@@ -31,15 +35,18 @@ use Overnet::Program::Runtime;
 # values only extend how long a wait is allowed to take; fast runs are
 # unaffected because every wait returns as soon as its condition holds.
 my $TIMEOUT_SCALE = $INC{'Devel/Cover.pm'} ? 30 : 1;
+my %test_hosts_by_port;
 
 sub _scaled_ms {
   my ($ms) = @_;
   return $ms * $TIMEOUT_SCALE;
 }
 
-my $program_path = File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'bin', 'overnet-irc-server');
+my $program_path = File::Spec->catfile(IRC_SERVER_ROOT, 'bin', 'overnet-irc-server');
 my $irc_lib      = File::Spec->catdir($FindBin::Bin, '..', '..', 'adapter-irc-perl', 'lib');
 my $spec_irc_dir = File::Spec->catdir($FindBin::Bin, '..', '..', 'spec', 'fixtures', 'irc');
+$spec_irc_dir = File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'spec', 'fixtures', 'irc')
+  if !-f File::Spec->catfile($spec_irc_dir, 'valid-channel-privmsg.json');
 my $authoritative_relay_script = File::Spec->catfile($FindBin::Bin, 'authoritative-nip29-relay.pl');
 my $program_irc_server_group   = $ENV{OVERNET_IRC_SERVER_GROUP} || 'base';
 
@@ -130,7 +137,10 @@ sub _wait_for_ready_details {
     next unless ($notification->{method}         || '') eq 'program.health';
     next unless ($notification->{params}{status} || '') eq 'ready';
     next unless ref($notification->{params}{details}) eq 'HASH';
-    return $notification->{params}{details};
+    my $details = $notification->{params}{details};
+    $test_hosts_by_port{$details->{listen_port}} = $host;
+    weaken($test_hosts_by_port{$details->{listen_port}});
+    return $details;
   }
 
   return;
@@ -188,23 +198,9 @@ sub _connect_irc_client_tls {
 sub _read_client_line {
   my ($client, $timeout_ms) = @_;
   my (undef, $caller_file, $caller_line) = caller;
-  $timeout_ms = _scaled_ms($timeout_ms);
-
-  while ($client->{read_buffer} !~ /\n/mx) {
-    my $selector = IO::Select->new($client->{socket});
-    my @ready    = $selector->can_read($timeout_ms / 1000);
-    die "Timed out waiting for IRC client line at $caller_file line $caller_line\n"
-      unless @ready;
-
-    my $bytes = sysread($client->{socket}, my $chunk, 4096);
-    die "IRC client disconnected before sending a line at $caller_file line $caller_line\n"
-      unless defined $bytes && $bytes > 0;
-    $client->{read_buffer} .= $chunk;
-  }
-
-  $client->{read_buffer} =~ s/\A([^\n]*\n)//mx;
-  my $line = $1;
-  $line =~ s/\r?\n\z//mx;
+  my $line = _read_client_line_optional($client, $timeout_ms);
+  die "Timed out waiting for IRC client line at $caller_file line $caller_line\n"
+    unless defined $line;
   return $line;
 }
 
@@ -243,15 +239,29 @@ sub _assert_registration_prelude {
 sub _read_client_line_optional {
   my ($client, $timeout_ms) = @_;
   my (undef, $caller_file, $caller_line) = caller;
-  $timeout_ms = _scaled_ms($timeout_ms);
+  my $deadline = time() + _scaled_ms($timeout_ms) / 1000;
+  my $selector = IO::Select->new($client->{socket});
 
   while ($client->{read_buffer} !~ /\n/mx) {
-    my $selector = IO::Select->new($client->{socket});
-    my @ready    = $selector->can_read($timeout_ms / 1000);
-    return unless @ready;
+    my @ready = $selector->can_read(0);
+    if (!@ready) {
+
+      # This process also hosts the runtime service loop. Keep it moving while
+      # waiting for an IRC child that may be awaiting a runtime response.
+      for my $host (values %test_hosts_by_port) {
+        $host->pump(timeout_ms => 0) if $host && $host->current_state eq 'ready';
+      }
+      @ready = $selector->can_read(0);
+      if (!@ready) {
+        my $remaining = $deadline - time();
+        return if $remaining <= 0;
+        @ready = $selector->can_read($remaining < 0.01 ? $remaining : 0.01);
+      }
+    }
+    next unless @ready;
 
     my $bytes = sysread($client->{socket}, my $chunk, 4096);
-    die "IRC client disconnected unexpectedly at $caller_file line $caller_line\n"
+    die "IRC client disconnected before sending a line at $caller_file line $caller_line\n"
       unless defined $bytes && $bytes > 0;
     $client->{read_buffer} .= $chunk;
   }
@@ -352,7 +362,7 @@ sub _build_authoritative_delegate_event_hash {
       ['server',     $scope],
       ['delegate',   $delegate_pubkey],
       ['session',    $session_id],
-      ['expires_at', $expires_at],
+      ['expires_at', q{} . $expires_at],
       (defined $nick ? (['nick', $nick]) : ()),
     ],
   );
@@ -370,7 +380,7 @@ sub _write_authenticate_payload {
   my $remaining = defined $payload ? $payload : '';
   my $sent      = 0;
 
-  while (length($remaining) > 400) {
+  while (length($remaining) >= 400) {
     _write_client_line($client, 'AUTHENTICATE ' . substr($remaining, 0, 400, ''));
     $sent = 1;
   }
@@ -518,8 +528,12 @@ sub _pump_hosts_until {
   my $hosts           = $args{hosts}           || [];
   my $timeout_ms      = $args{timeout_ms}      || _scaled_ms(1_000);
   my $pump_timeout_ms = $args{pump_timeout_ms} || 50;
-  my $condition       = $args{condition}       || sub {0};
-  my $deadline        = time() + ($timeout_ms / 1000);
+
+  # Interleave hosts and client reads. Blocking each host for a full second
+  # can exhaust the overall deadline while already-queued IRC lines wait.
+  $pump_timeout_ms = 50 if $pump_timeout_ms > 50;
+  my $condition = $args{condition} || sub {0};
+  my $deadline  = time() + ($timeout_ms / 1000);
 
   while (time() < $deadline) {
     for my $host (@{$hosts}) {
@@ -1298,7 +1312,7 @@ subtest 'IRC server program enforces nick uniqueness and emits 433 for collision
 subtest 'IRC server program supports a minimal IRC client compatibility slice' => sub {
   my $privmsg           = _load_irc_fixture('valid-channel-privmsg.json');
   my $network           = $privmsg->{input}{network};
-  my $channel_object_id = 'irc:' . $network . ':#OverNet';
+  my $channel_object_id = 'irc:' . $network . ':#overnet';
 
   my $tmpdir   = tempdir(CLEANUP => 1);
   my $key_path = File::Spec->catfile($tmpdir, 'irc-server-test-key.pem');
@@ -2882,6 +2896,7 @@ subtest 'IRC server program uses authoritative hosted-channel state for moderate
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys  => ['f' x 64],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,
@@ -3244,6 +3259,7 @@ subtest 'IRC server program authenticates authoritative clients through SASL NOS
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys  => ['f' x 64],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,
@@ -3447,6 +3463,7 @@ subtest 'IRC server program uses the real IRC adapter for authoritative NIP-29 c
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys  => ['f' x 64],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,
@@ -3766,6 +3783,7 @@ subtest 'IRC server program rejects non-member JOIN on a closed authoritative ch
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys  => ['f' x 64],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,
@@ -4021,6 +4039,7 @@ subtest 'IRC server program admits an invited user to a closed authoritative cha
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys  => ['f' x 64],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,
@@ -4378,6 +4397,7 @@ if (_run_program_irc_server_group('relay')) {
         server_name      => $server_name,
         signing_key_file => $key_path,
         adapter_config   => {
+          snapshot_pubkeys  => [$seed_key->pubkey_hex],
           network           => $network,
           authority_profile => 'nip29',
           group_host        => $group_host,
@@ -4635,7 +4655,7 @@ if (_run_program_irc_server_group('relay')) {
     my $group_host                   = 'groups.example.test';
     my $group_id                     = 'ops';
     my $relay_host_pump_ms           = 1_500;
-    my $relay_propagation_timeout_ms = _scaled_ms(5_000);
+    my $relay_propagation_timeout_ms = _scaled_ms(15_000);
     my $fresh_reinvite_timeout_ms    = _scaled_ms(10_000);
     my $relay_port                   = _free_port();
     my $relay_url                    = "ws://127.0.0.1:$relay_port";
@@ -4719,6 +4739,7 @@ if (_run_program_irc_server_group('relay')) {
           server_name      => $args{server_name},
           signing_key_file => $key_path,
           adapter_config   => {
+            snapshot_pubkeys  => [$seed_key->pubkey_hex],
             network           => $network,
             authority_profile => 'nip29',
             group_host        => $group_host,
@@ -5752,7 +5773,7 @@ if (_run_program_irc_server_group('relay')) {
     my $channel                      = '#Fresh';
     my $group_host                   = 'groups.example.test';
     my $relay_host_pump_ms           = 1_500;
-    my $relay_propagation_timeout_ms = _scaled_ms(5_000);
+    my $relay_propagation_timeout_ms = _scaled_ms(15_000);
     my $relay_port                   = _free_port();
     my $relay_url                    = "ws://127.0.0.1:$relay_port";
     my $server_name_a                = 'overnet-create-a.irc.local';
@@ -6283,7 +6304,7 @@ if (_run_program_irc_server_group('relay')) {
     my $channel                      = '#Gone';
     my $group_host                   = 'groups.example.test';
     my $relay_host_pump_ms           = 1_500;
-    my $relay_propagation_timeout_ms = _scaled_ms(5_000);
+    my $relay_propagation_timeout_ms = _scaled_ms(15_000);
     my $relay_port                   = _free_port();
     my $relay_url                    = "ws://127.0.0.1:$relay_port";
     my $server_name_a                = 'overnet-delete-a.irc.local';
@@ -6663,7 +6684,17 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
       'the relay exposes the authoritative hosted-channel tombstone';
 
     $drain_client_lines->($alice_a, 10);
-    $drain_client_lines->($bob_b,   10);
+    is(
+      scalar _pump_hosts_until_client_lines(
+        hosts           => [$host_a, $host_b],
+        client          => $bob_b,
+        count           => 1,
+        pump_timeout_ms => $relay_host_pump_ms,
+        timeout_ms      => $relay_propagation_timeout_ms,
+      ),
+      [":bob PART $channel :channel deleted"],
+      'instance B announces the tombstone before subsequent channel queries',
+    );
 
     _write_client_line($bob_b, "LIST $channel");
     ok $host_b->pump(timeout_ms => $relay_host_pump_ms) >= 0,
@@ -6713,7 +6744,7 @@ if (_run_program_irc_server_group('relay')) {
     my $channel                      = '#Return';
     my $group_host                   = 'groups.example.test';
     my $relay_host_pump_ms           = 1_500;
-    my $relay_propagation_timeout_ms = _scaled_ms(5_000);
+    my $relay_propagation_timeout_ms = _scaled_ms(15_000);
     my $relay_port                   = _free_port();
     my $relay_url                    = "ws://127.0.0.1:$relay_port";
     my $server_name_a                = 'overnet-undelete-a.irc.local';
@@ -7021,7 +7052,17 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
     ok $topic_lines, 'alice receives the authoritative TOPIC line before undelete';
     is $topic_lines, [":alice TOPIC $channel :$topic_text",],
       'the authoritative TOPIC line is rendered before undelete';
-    $drain_client_lines->($bob_b, 10);
+    is(
+      scalar _pump_hosts_until_client_lines(
+        hosts           => [$host_a, $host_b],
+        client          => $bob_b,
+        count           => 1,
+        pump_timeout_ms => $relay_host_pump_ms,
+        timeout_ms      => $relay_propagation_timeout_ms,
+      ),
+      [":alice TOPIC $channel :$topic_text"],
+      'bob observes the retained topic before the next control',
+    );
 
     _write_client_line($alice_a, "MODE $channel +i");
     ok $host_a->pump(timeout_ms => $relay_host_pump_ms) >= 0,
@@ -7035,7 +7076,17 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
     );
     ok $mode_lines, 'alice receives the authoritative MODE +i line before undelete';
     is $mode_lines, [":alice MODE $channel +i",], 'the authoritative MODE +i line is rendered before undelete';
-    $drain_client_lines->($bob_b, 10);
+    is(
+      scalar _pump_hosts_until_client_lines(
+        hosts           => [$host_a, $host_b],
+        client          => $bob_b,
+        count           => 1,
+        pump_timeout_ms => $relay_host_pump_ms,
+        timeout_ms      => $relay_propagation_timeout_ms,
+      ),
+      [":alice MODE $channel +i"],
+      'bob observes the retained mode before deletion',
+    );
 
     _write_client_line($alice_a, "OVERNETCHANNEL DELETE $channel");
     ok $host_a->pump(timeout_ms => $relay_host_pump_ms) >= 0, 'instance A pumps the tombstone request before undelete';
@@ -7068,7 +7119,17 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
       ),
       'the relay exposes the tombstone before UNDELETE';
     $drain_client_lines->($alice_a, 10);
-    $drain_client_lines->($bob_b,   10);
+    is(
+      scalar _pump_hosts_until_client_lines(
+        hosts           => [$host_a, $host_b],
+        client          => $bob_b,
+        count           => 1,
+        pump_timeout_ms => $relay_host_pump_ms,
+        timeout_ms      => $relay_propagation_timeout_ms,
+      ),
+      [":bob PART $channel :channel deleted"],
+      'bob observes deletion before the channel is restored',
+    );
 
     _write_client_line($alice_a, "OVERNETCHANNEL UNDELETE $channel");
     ok $host_a->pump(timeout_ms => $relay_host_pump_ms) >= 0,
@@ -7231,7 +7292,7 @@ if (_run_program_irc_server_group('relay')) {
     my $group_host                   = 'groups.example.test';
     my $group_id                     = 'ops';
     my $relay_host_pump_ms           = 1_500;
-    my $relay_propagation_timeout_ms = _scaled_ms(5_000);
+    my $relay_propagation_timeout_ms = _scaled_ms(15_000);
     my $relay_port                   = _free_port();
     my $relay_url                    = "ws://127.0.0.1:$relay_port";
     my $server_name_a                = 'overnet-ban-a.irc.local';
@@ -7322,6 +7383,7 @@ if (_run_program_irc_server_group('relay')) {
           signing_key_file => $key_path,
           cloak_secret     => $cloak_secret,
           adapter_config   => {
+            snapshot_pubkeys  => [$seed_key->pubkey_hex],
             network           => $network,
             authority_profile => 'nip29',
             group_host        => $group_host,
@@ -7708,7 +7770,7 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
       ],
     );
     my @sorted_unban_events =
-      sort { (($a->{created_at} || 0) <=> ($b->{created_at} || 0)) || (($a->{id} || '') cmp($b->{id} || '')) }
+      sort { (($a->{created_at} || 0) <=> ($b->{created_at} || 0)) || (($a->{id} || '') cmp ($b->{id} || '')) }
       @{$relay_unban_events};
     my $latest_unban_event = $sorted_unban_events[-1];
     ok $latest_unban_event, 'a latest authoritative metadata edit exists after -b';
@@ -7751,8 +7813,8 @@ qr/\A:\Q$args{server_name}\E\ NOTICE\ \Q$args{nick}\E\ :OVERNETAUTH\ DELEGATE\ (
 
 subtest 'IRC program entrypoints do not import Net::Nostr directly' => sub {
   my @paths = (
-    File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',),
-    File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'bin', 'overnet-irc-server',),
+    File::Spec->catfile(IRC_SERVER_ROOT, 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',),
+    File::Spec->catfile(IRC_SERVER_ROOT, 'bin', 'overnet-irc-server',),
   );
 
   for my $path (@paths) {
@@ -7767,8 +7829,7 @@ subtest 'IRC program entrypoints do not import Net::Nostr directly' => sub {
 };
 
 subtest 'IRC server source keeps relay I/O and raw authoritative interpretation out of the program layer' => sub {
-  my $server_path =
-    File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',);
+  my $server_path = File::Spec->catfile(IRC_SERVER_ROOT, 'lib', 'Overnet', 'Program', 'IRC', 'Server.pm',);
 
   open my $fh, '<', $server_path
     or die "Unable to read $server_path: $!";

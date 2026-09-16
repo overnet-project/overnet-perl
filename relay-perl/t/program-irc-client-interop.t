@@ -1,8 +1,11 @@
 use strictures 2;
-use Test2::V0;
 use File::Spec;
-use File::Temp qw(tempdir tempfile);
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
+use Test2::V0;
+use File::Temp qw(tempdir tempfile);
 use IO::Select;
 use IO::Socket::INET;
 use IO::Socket::SSL        qw(SSL_VERIFY_NONE);
@@ -15,7 +18,7 @@ use POSIX       qw(WNOHANG);
 use Symbol      qw(gensym);
 use Time::HiRes qw(sleep time);
 
-my $program_repo   = File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server');
+my $program_repo   = File::Spec->catdir(IRC_SERVER_ROOT);
 my $program_path   = File::Spec->catfile($program_repo, 'bin', 'overnet-irc-server');
 my $irc_lib        = File::Spec->catdir($FindBin::Bin, '..', '..', 'adapter-irc-perl', 'lib');
 my $code_lib       = File::Spec->catdir($FindBin::Bin, '..', 'lib');
@@ -277,7 +280,6 @@ sub _spawn_live_irc_server {
 use strictures 2;
 use JSON ();
 use File::Path qw(make_path);
-use File::Spec;
 use Net::Nostr::Group ();
 use lib $ENV{OVERNET_PROGRAM_LIB};
 use lib $ENV{OVERNET_CODE_LIB};

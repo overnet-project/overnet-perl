@@ -281,7 +281,7 @@ subtest 'object-read endpoint returns current state view' => sub {
 
   my $response =
     $relay->_handle_object_http_request('GET',
-    '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23overnet',
+    '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23overnet&author=' . $author->pubkey_hex,
     );
 
   like $response, qr/\AHTTP\/1\.[01]\ 200\ /mx, 'returns HTTP 200';
@@ -411,7 +411,7 @@ subtest 'publish enforces configured event limits' => sub {
   my $expiring = _build_relay();
   $expiring->_handle_event(
     1,
-    _create_overnet_event(%stale_args, extra_tags => [['expiration', time() - 100]]),
+    _create_overnet_event(%stale_args, extra_tags => [['expiration', '' . (time() - 100)]]),
   );
   like _last_message_of_type($expiring->_connections->{1}, 'OK')->message,
     qr/\Ainvalid:\ event\ has\ expired/mx, 'expired events are rejected';
@@ -487,7 +487,7 @@ subtest 'publish enforces proof-of-work requirements' => sub {
     my $candidate = _create_overnet_event(
       %pow_args,
       body       => {text => "pow attempt $nonce"},
-      extra_tags => [['nonce', $nonce, 4]],
+      extra_tags => [['nonce', "$nonce", '4']],
     );
     if (!defined($weak_event) && $candidate->difficulty < 4) {
       $weak_event = $candidate;
@@ -780,85 +780,31 @@ subtest 'object read endpoint validates requests' => sub {
   }
 
   like $relay->_handle_object_http_request('GET',
-    '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23missing'),
+    '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23missing&author=' . $author->pubkey_hex),
     qr/\AHTTP\/1\.1\ 404\ /mx, 'unknown objects return 404';
 };
 
-subtest 'object read endpoint reports removal state' => sub {
-  my %view_args = (
-    key         => $author,
-    object_type => 'chat.channel',
-    body        => {},
-  );
-  my $view = sub {
-    my ($relay, $object_id) = @_;
-    my $response = $relay->_handle_object_http_request('GET',
-      "/.well-known/overnet/v1/object?type=chat.channel&id=$object_id");
-    like $response, qr/\AHTTP\/1\.1\ 200\ /mx, "object view for $object_id returns 200";
-    return _decode_http_json_body($response);
-  };
-
+subtest 'object read endpoint reports exact removal state' => sub {
   my $relay = _build_relay();
-
-  # Removal-only object: the store never validates, so seed it directly.
-  $relay->store->store(
-    _create_overnet_event(
-      %view_args,
-      kind       => 7801,
-      event_type => 'core.removal',
-      object_id  => 'obj:removed-only',
-      created_at => 1_700_000_100,
-    )
-  );
-  my $removed_only = $view->($relay, 'obj:removed-only');
-  ok $removed_only->{removed}, 'a removal without state reads as removed';
-  is $removed_only->{state_event}, undef, 'no state event is returned';
-  ok $removed_only->{removal_event}, 'the removal event is returned';
-
-  # State followed by newer removal: removed.
-  $relay->store->store(
-    _create_overnet_event(
-      %view_args,
-      kind       => 37800,
-      event_type => 'chat.topic',
-      object_id  => 'obj:then-removed',
-      created_at => 1_700_000_000,
-    )
-  );
-  $relay->store->store(
-    _create_overnet_event(
-      %view_args,
-      kind       => 7801,
-      event_type => 'core.removal',
-      object_id  => 'obj:then-removed',
-      created_at => 1_700_000_100,
-    )
-  );
-  ok $view->($relay, 'obj:then-removed')->{removed}, 'a newer removal marks the object removed';
-
-  # Removal followed by newer state: restored.
-  $relay->store->store(
-    _create_overnet_event(
-      %view_args,
-      kind       => 7801,
-      event_type => 'core.removal',
-      object_id  => 'obj:restored',
-      created_at => 1_700_000_000,
-    )
-  );
-  $relay->store->store(
-    _create_overnet_event(
-      %view_args,
-      kind       => 37800,
-      event_type => 'chat.topic',
-      object_id  => 'obj:restored',
-      created_at => 1_700_000_100,
-    )
-  );
-  my $restored = $view->($relay, 'obj:restored');
-  ok !$restored->{removed}, 'a newer state event restores the object';
-  ok $restored->{state_event},   'the state event is returned';
-  ok $restored->{removal_event}, 'the older removal event is still disclosed';
+  my $state = _create_overnet_event(key => $author, kind => 37800,
+    event_type => 'chat.topic', object_type => 'chat.channel', object_id => 'obj:removed',
+    body => {}, created_at => 1_700_000_000);
+  my $removal = _create_overnet_event(key => $author, kind => 7801,
+    event_type => 'core.removal', object_type => 'chat.channel', object_id => 'obj:removed',
+    extra_tags => [['e', $state->id]], body => {}, created_at => 1_700_000_100);
+  ok $relay->accept_synced_event($_)->{accepted}, 'valid signed evidence admitted' for ($state, $removal);
+  my $path = '/.well-known/overnet/v1/object?type=chat.channel&id=obj%3Aremoved&author=' . $author->pubkey_hex;
+  my $body = _decode_http_json_body($relay->_handle_object_http_request('GET', $path));
+  ok $body->{removed}, 'exact state target is removed';
+  is $body->{state_event}, undef, 'removed state is not disclosed';
+  is $body->{removal_event}{id}, $removal->id, 'authorized removal is returned';
+  my $new = _create_overnet_event(key => $author, kind => 37800,
+    event_type => 'chat.topic', object_type => 'chat.channel', object_id => 'obj:removed',
+    body => {}, created_at => 1_700_000_200);
+  ok $relay->accept_synced_event($new)->{accepted}, 'new state admitted';
+  $body = _decode_http_json_body($relay->_handle_object_http_request('GET', $path));
+  ok !$body->{removed}, 'a new state restores this author representation';
+  is $body->{removal_event}, undef, 'a removal of the old state is not returned';
 };
 
 subtest 'base Nostr validation failures are rejected before Overnet checks' => sub {
@@ -1071,4 +1017,3 @@ sub _decode_http_json_body {
   my (undef, $body) = split /\r\n\r\n/mx, $response, 2;
   return $JSON->decode($body);
 }
-

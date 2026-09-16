@@ -118,6 +118,30 @@ subtest 'dispatch_request validates its envelope' => sub {
   );
 };
 
+subtest 'adapter sessions belong to their opening runtime instance' => sub {
+  my ($services, $id) = _services_with_adapter(t::services::ResultAdapter->new(result => {events => []}));
+  for my $method (qw(adapters.map_input adapters.derive adapters.close_session)) {
+    my $error = dies { $services->dispatch_request($method,
+      {adapter_session_id => $id, input => {}, operation => 'state', session_id => 'session-1'},
+      session_id => 'other-session', permissions => ['adapters.use']) };
+    is($error->{code}, 'protocol.invalid_params', "$method rejects another instance despite forged params");
+  }
+  is(_map_result($services, $id), {events => []}, 'owner can still use the session');
+};
+
+subtest 'service parameters retain their JSON scalar types' => sub {
+  my $services = Overnet::Program::Services->new(runtime => Overnet::Program::Runtime->new);
+  for my $case (
+    ['storage.put', {key => 123, value => {}}, 'storage.write'],
+    ['timers.schedule', {timer_id => 't', delay_ms => '1'}, 'timers.write'],
+    ['subscriptions.open', {subscription_id => 's', query => {kind => '7800'}}, 'subscriptions.read'],
+  ) {
+    my $error = dies { $services->dispatch_request($case->[0], $case->[1],
+      permissions => [$case->[2]], session_id => 'session-1') };
+    is($error->{code}, 'protocol.invalid_params', "$case->[0] rejects coercion");
+  }
+};
+
 subtest 'adapter results are normalized and validated' => sub {
   my $result_for = sub {
     my ($result) = @_;
@@ -173,7 +197,7 @@ subtest 'adapter results are normalized and validated' => sub {
   my $string_error = dies { _map_result($dying_services, $dying_session) };
   is($string_error->{code}, 'runtime.service_unavailable',
     'string adapter errors become service_unavailable');
-  like($string_error->{message}, qr/adapter exploded/, 'the adapter error text is preserved');
+  is($string_error->{message}, 'Adapter operation failed', 'raw adapter diagnostics are not exposed');
 
   my ($hash_services, $hash_session) = _services_with_adapter(
     t::services::DyingAdapter->new(error => {code => 'custom.code', message => 'structured'}),
@@ -403,7 +427,7 @@ subtest 'nostr subscription bookkeeping errors' => sub {
   );
   my $snapshot = $services->dispatch_request(
     'nostr.read_subscription_snapshot',
-    {subscription_id => 'dup-sub', refresh => '1', timeout_ms => _scaled_ms(5_000)},
+    {subscription_id => 'dup-sub', refresh => JSON::true, timeout_ms => _scaled_ms(5_000)},
     %dispatch,
   );
   ok(ref($snapshot->{events}) eq 'ARRAY', 'refreshing snapshots reads through the relay');

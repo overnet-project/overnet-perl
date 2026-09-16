@@ -19,7 +19,7 @@ my $snapshot_key         = Net::Nostr::Key->new;
 
 sub _relay {
   my (%args) = @_;
-  return build_authoritative_relay(
+  return build_authoritative_relay(clock => sub { $BASE_TIME + 1000 },
     relay_url  => $RELAY_URL,
     grant_kind => $GRANT_KIND,
     %args,
@@ -550,11 +550,8 @@ subtest 'concurrent session grants survive replaceable grant storage' => sub {
     delegate_pubkey => $second_session_key->pubkey_hex,
   );
 
-  # Both grants pass through the relay authorization hook, but only the
-  # replaceable-storage winner stays in the store: the relay must still
-  # honor the other session's grant from its retained-grant index.
-  $relay->on_event->($grant_a);
-  $relay->on_event->($grant_b);
+  # Accepted grants are durable ID-indexed evidence, not just replaceable slots.
+  $relay->store->store($grant_a);
   $relay->store->store($grant_b);
 
   my ($accepted, $reason) = _authorize(
@@ -784,7 +781,7 @@ subtest 'control events with malformed identity tags are rejected' => sub {
   like $reason, qr/invalid:.*require\ one\ h\ tag/mx, 'empty h tag reason';
 };
 
-subtest 'retained grants are pruned once they expire' => sub {
+subtest 'authorization reads only retained grants' => sub {
   my $relay = _relay();
 
   my $expired_grant = _grant_event(
@@ -815,6 +812,7 @@ subtest 'retained grants are pruned once they expire' => sub {
     delegate_pubkey => $operator_session_key->pubkey_hex,
   );
   _authorize($relay, $live_grant);
+  $relay->store->store($live_grant);
 
   my ($accepted, $reason) = _authorize(
     $relay,
@@ -835,7 +833,7 @@ subtest 'retained grants are pruned once they expire' => sub {
       authority_id => $live_grant->id,
     )
   );
-  ok $accepted, 'a retained live grant authorizes control events without store access' or diag $reason;
+  ok $accepted, 'a stored live grant authorizes control events' or diag $reason;
 };
 
 subtest 'tombstoned groups only accept an operator un-tombstone edit' => sub {
@@ -925,6 +923,7 @@ subtest 'a delegated 39000 metadata event is rejected for a tombstoned group' =>
         ['d',                 $GROUP_ID],
         ['overnet_actor',     $operator_key->pubkey_hex],
         ['overnet_authority', $op_grant->id],
+        ['overnet_sequence', '2'],
       ],
     )
   );
@@ -1275,7 +1274,12 @@ subtest 'actor membership derivation follows joins, invites, and removals' => su
 };
 
 subtest 'group event ordering breaks ties deterministically' => sub {
-  my $compare = \&Overnet::Authority::HostedChannel::Relay::_compare_group_events;
+  my $compare = sub {
+    my ($first, $second) = @_;
+    return 0 if $first->id eq $second->id;
+    my $ordered = Overnet::Authority::HostedChannel::ordered_events([$first, $second]);
+    return $ordered->[0]->id eq $first->id ? -1 : 1;
+  };
 
   my $seq = sub {
     my (%args) = @_;
@@ -1306,7 +1310,7 @@ subtest 'group event ordering breaks ties deterministically' => sub {
 
   my $metadata = $seq->(kind => 39_000, content => 'ranked');
   my $put_user = $seq->(content => 'ranked put');
-  is $compare->($metadata, $put_user), -1, 'semantic phase rank orders unsequenced ties';
+  is $compare->($metadata, $put_user), 1, 'relay snapshot phase follows controls';
 
   my $unranked = $operator_session_key->create_event(
     kind       => 1,
@@ -1552,7 +1556,7 @@ subtest 'derivation tolerates stores that return no event list' => sub {
     )
   );
   ok !$accepted, 'an eventless store derives an empty group';
-  like $reason, qr/unauthorized:\ actor\ is\ not\ a\ group\ member/mx, 'empty-store leave reason';
+  like $reason, qr/unauthorized:\ delegation\ grant\ is\ not\ known/mx, 'missing retained evidence fails closed';
 };
 
 subtest 'metadata and helper tag parsing tolerate malformed input' => sub {
@@ -1803,6 +1807,7 @@ subtest 'a delegated 39000 cannot tombstone an unclaimed group' => sub {
     extra_tags => [
       ['overnet_actor',     $attacker_key->pubkey_hex],
       ['overnet_authority', $grant->id],
+      ['overnet_sequence', '2'],
       ['status',            'tombstoned'],
     ],
   );
@@ -1840,6 +1845,7 @@ subtest 'a channel operator can still tombstone an established channel' => sub {
     extra_tags => [
       ['overnet_actor',     $operator_key->pubkey_hex],
       ['overnet_authority', $grant->id],
+      ['overnet_sequence', '2'],
       ['status',            'tombstoned'],
     ],
   );
@@ -1866,6 +1872,7 @@ subtest 'a delegated 39000 cannot close or ban an unclaimed group' => sub {
       extra_tags => [
         ['overnet_actor',     $attacker_key->pubkey_hex],
         ['overnet_authority', $grant->id],
+      ['overnet_sequence', '2'],
         @{$case->{tags}},
       ],
     );
@@ -1890,6 +1897,7 @@ subtest 'a name-only delegated 39000 creation bootstrap is still accepted' => su
       extra_tags => [
         ['overnet_actor',     $operator_key->pubkey_hex],
         ['overnet_authority', $grant->id],
+      ['overnet_sequence', '2'],
         ['name',              '#newchannel'],
       ],
     ),

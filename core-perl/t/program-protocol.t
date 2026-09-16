@@ -820,4 +820,20 @@ subtest 'framing edge paths' => sub {
     'finishing with a partial trailing frame croaks');
 };
 
+subtest 'wire decoding rejects duplicate members and wrong scalar types' => sub {
+  my $codec = Overnet::Program::Protocol->new;
+  for my $json ('{"type":"request","id":"x","id":"y","method":"config.get"}',
+      '{"type":"request","id":"x","params":{"secret":1,"secret":2}}') {
+    like dies { $codec->feed(length($json) . "\n" . $json) }, qr/JSON/i,
+      'duplicate names fail before decoding loses information';
+    $codec = Overnet::Program::Protocol->new;
+  }
+  my $message = JSON::decode_json('{"type":"request","id":42,"method":"config.get"}');
+  my ($ok) = $codec->validate_message($message);
+  ok !$ok, 'numeric correlation identifiers are not string identifiers';
+  ($ok) = $codec->validate_message(JSON::decode_json(
+    '{"type":"notification","method":"runtime.timer_fired","params":{"timer_id":"t","fired_at":"123"}}'));
+  ok !$ok, 'quoted integers are not numeric timestamps';
+};
+
 done_testing;

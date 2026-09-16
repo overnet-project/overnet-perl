@@ -1,10 +1,13 @@
 use strictures 2;
+use File::Spec;
+use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
 
 use AnyEvent;
 use JSON ();
-use File::Spec;
 use File::Temp qw(tempdir);
-use FindBin;
 use IO::Select;
 use IO::Socket::INET;
 use IPC::Open3   qw(open3);
@@ -23,7 +26,7 @@ use Overnet::Program::Host;
 use Overnet::Program::Runtime;
 use Overnet::Relay::Sync;
 
-my $program_path = File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'bin', 'overnet-irc-server');
+my $program_path = File::Spec->catfile(IRC_SERVER_ROOT, 'bin', 'overnet-irc-server');
 my $irc_lib      = File::Spec->catdir($FindBin::Bin, '..', '..', 'adapter-irc-perl', 'lib');
 my $authoritative_relay_script = File::Spec->catfile($FindBin::Bin, 'authoritative-nip29-relay.pl');
 
@@ -336,7 +339,7 @@ sub _build_authoritative_delegate_payload {
       ['server',     $args{scope}],
       ['delegate',   $args{delegate_pubkey}],
       ['session',    $args{session_id}],
-      ['expires_at', $args{expires_at}],
+      ['expires_at', q{} . $args{expires_at}],
       (defined($args{nick}) ? (['nick', $args{nick}]) : ()),
     ],
   );
@@ -523,6 +526,7 @@ subtest 'IRC server recovers authoritative state from a second live relay withou
       server_name      => $server_name,
       signing_key_file => $key_path,
       adapter_config   => {
+        snapshot_pubkeys => [$seed_key->pubkey_hex],
         network           => $network,
         authority_profile => 'nip29',
         group_host        => $group_host,

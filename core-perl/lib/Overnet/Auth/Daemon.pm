@@ -39,7 +39,7 @@ sub BUILDARGS {
   my $max_connections = _daemon_max_connections(%args);
   my $state_store     = _daemon_state_store($config, %args);
   my $agent           = _daemon_agent($config, $state_store, %args);
-  my $server          = $args{server} || Overnet::Auth::Server->new(agent => $agent);
+  my $server = $args{server} || Overnet::Auth::Server->new(agent => $agent, caller_resolver => $args{caller_resolver});
 
   return {
     config          => $config,
@@ -147,9 +147,9 @@ sub _daemon_mutable_state {
   my $mutable_state = $config->mutable_state;
   if ($state_store) {
     my $loaded_state = $state_store->load_state;
-    if (defined $loaded_state) {
-      $mutable_state = $loaded_state;
-    }
+    croak "Configured auth state is missing; restore it or explicitly provision a new state store\n"
+      if !defined $loaded_state;
+    $mutable_state = $loaded_state;
   }
   return $mutable_state;
 }
@@ -183,16 +183,9 @@ sub run {
       croak "accept on auth-agent endpoint failed: $OS_ERROR";
     }
 
-    eval {
-      $self->{server}->serve_socket($client);
-      1;
-    } or do {
-      my $error = $EVAL_ERROR || 'unknown auth-agent socket failure';
-      close $client
-        or croak "close auth-agent client socket failed: $OS_ERROR";
-      $self->_teardown_socket;
-      croak $error;
-    };
+    # A framing or dispatch failure terminates this connection, not the agent.
+    # Do not echo backend or peer-controlled diagnostics to logs or other peers.
+    my $served_ok = eval { $self->{server}->serve_socket($client); 1; };
 
     close $client
       or croak "close auth-agent client socket failed: $OS_ERROR";
@@ -212,12 +205,17 @@ sub _listen_socket {
   my $endpoint = $self->{endpoint};
   my $parent   = dirname($endpoint);
   if (!(-d $parent)) {
-    make_path($parent);
+    make_path($parent, {mode => oct('0700')});
   }
 
   if (-e $endpoint) {
     if (!(-S $endpoint)) {
       croak "auth-agent endpoint path already exists and is not a socket\n";
+    }
+    my $existing = IO::Socket::UNIX->new(Type => SOCK_STREAM, Peer => $endpoint);
+    if ($existing) {
+      close $existing or croak "close existing auth-agent probe failed: $OS_ERROR";
+      croak "auth-agent endpoint is already in use\n";
     }
     unlink $endpoint
       or croak "unlink stale auth-agent socket $endpoint failed: $OS_ERROR";
@@ -227,11 +225,13 @@ sub _listen_socket {
   if (ref($self->{listen_factory}) eq 'CODE') {
     $socket = $self->{listen_factory}->($endpoint);
   } else {
+    my $old_umask = umask oct('0077');
     $socket = IO::Socket::UNIX->new(
       Type   => SOCK_STREAM,
       Local  => $endpoint,
       Listen => 5,
     );
+    umask $old_umask;
   }
   if (!($socket)) {
     croak "listen on auth-agent endpoint $endpoint failed: $OS_ERROR";

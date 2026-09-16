@@ -1,11 +1,14 @@
 use strictures 2;
-use Test::More;
-use Digest::SHA qw(hmac_sha256_hex);
 use File::Spec;
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
+use Test::More;
+use Digest::SHA qw(hmac_sha256_hex);
 use Socket qw(AF_UNIX SOCK_STREAM PF_UNSPEC);
 
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib');
+use lib File::Spec->catdir(IRC_SERVER_ROOT, 'lib');
 
 use_ok('Overnet::Program::IRC::Server');
 use_ok('Overnet::Program::IRC::Command::Auth');

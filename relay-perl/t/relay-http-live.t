@@ -129,7 +129,7 @@ subtest 'the object endpoint is dispatched from the socket layer' => sub {
   my $response = _raw_exchange(
     send => _http_request_text(
       method => 'GET',
-      path   => '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23live',
+      path   => '/.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alocal%3A%23live&author=' . $state->pubkey,
     ),
   );
   like $response, qr/\AHTTP\/1\.1\ 200\ /mx, 'object view returns 200';

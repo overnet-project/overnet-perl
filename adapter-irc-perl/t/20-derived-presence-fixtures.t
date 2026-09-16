@@ -67,7 +67,7 @@ subtest 'generic derive dispatches channel_presence' => sub {
   );
 
   ok $result->{valid}, 'generic derive returns a valid result';
-  is $result->{event}{kind}, 37800, 'generic derive returns derived state event';
+  is $result->{event}{kind}, 7800, 'generic derive returns immutable presence event';
 };
 
 subtest 'generic derive rejects unsupported operations' => sub {
@@ -278,7 +278,7 @@ sub _spec_root {
     File::Spec->catdir($FindBin::Bin, '..', '..', 'spec'),
   ) {
     my $abs = File::Spec->rel2abs($dir);
-    return $abs if -d $abs;
+    return $abs if -f File::Spec->catfile($abs, 'docs', 'core.md');
   }
 
   die "Can't locate spec root\n";

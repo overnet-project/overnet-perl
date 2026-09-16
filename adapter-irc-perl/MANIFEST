@@ -21,3 +21,4 @@ t/input-validation.t
 t/makemaker-metadata.t
 t/manifest-skip-policy.t
 t/shared-perl-layout.t
+t/60-identity-audit.t

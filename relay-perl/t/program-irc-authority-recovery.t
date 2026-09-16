@@ -1,10 +1,13 @@
 use strictures 2;
 use File::Spec;
 use FindBin;
+use constant IRC_SERVER_ROOT => -f File::Spec->catfile($FindBin::Bin, '..', '..', 'irc-server', 'Makefile.PL')
+  ? File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server')
+  : File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server');
 use Test2::V0;
 
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib');
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'core-perl',  'lib');
+use lib File::Spec->catdir(IRC_SERVER_ROOT, 'lib');
+use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'core-perl', 'lib');
 
 use Overnet::Authority::HostedChannel;
 use Overnet::Program::IRC::Authority::Coordinator;
@@ -34,6 +37,12 @@ use Overnet::Program::IRC::Authority::Coordinator;
   sub _authority_relay_url              { return 'wss://relay.example.test' }
   sub _authority_relay_query_timeout_ms { return 1500 }
   sub _authority_grant_kind             { return 14142 }
+
+  sub _update_authoritative_channel_cache_with_event {
+    my ($self, %args) = @_;
+    push @{$self->{applied_events}}, $args{event}{id};
+    return 1;
+  }
 
   sub set_channel_events {
     my ($self, $channel, $events) = @_;
@@ -140,7 +149,7 @@ use Overnet::Program::IRC::Authority::Coordinator;
 
   sub _sort_authoritative_events {
     my ($self, $events) = @_;
-    return [sort { ($a->{created_at} || 0) <=> ($b->{created_at} || 0) || (($a->{id} || '') cmp($b->{id} || '')) }
+    return [sort { ($a->{created_at} || 0) <=> ($b->{created_at} || 0) || (($a->{id} || '') cmp ($b->{id} || '')) }
         @{$events || []}];
   }
 
@@ -292,6 +301,8 @@ subtest
     $server->{authoritative_channel_cache}{'#ops'}{view}{topic},
     'New topic', 'reconnect refresh updates derived topic state from the merged history',
   );
+  $coordinator->refresh_authoritative_nip29_channel_cache('#ops', refresh => 1,);
+  is($server->{applied_events}, ['m2'], 'only new events from later snapshots produce live transitions');
   };
 
 subtest 'out-of-order discovery replay keeps tombstones authoritative' => sub {

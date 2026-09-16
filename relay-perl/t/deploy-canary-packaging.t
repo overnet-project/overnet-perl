@@ -15,6 +15,7 @@ sub _slurp {
 my $code_root    = File::Spec->catdir($FindBin::Bin, '..');
 my $project_root = File::Spec->catdir($code_root,    '..');
 my $irc_root     = File::Spec->catdir($project_root, 'irc-server');
+$irc_root = File::Spec->catdir($project_root, '..', 'irc-server') if !-f File::Spec->catfile($irc_root, 'Makefile.PL');
 
 my $irc_command = File::Spec->catfile($irc_root, 'bin', 'overnet-irc-server');
 my $relay_sync_unit      = File::Spec->catfile($code_root, 'deploy', 'systemd', 'overnet-relay-sync@.service');

@@ -34,7 +34,8 @@ sub _slurp {
 
 my $code_root    = File::Spec->catdir($FindBin::Bin, '..');
 my $project_root = File::Spec->catdir($code_root,    '..');
-my $irc_root     = File::Spec->catdir($project_root, 'irc-server');
+my $irc_root = File::Spec->catdir($project_root, 'irc-server');
+$irc_root = File::Spec->catdir($project_root, '..', 'irc-server') if !-f File::Spec->catfile($irc_root, 'bin', 'overnet-irc-server');
 
 my $relay_service_script = File::Spec->catfile($code_root, 'bin',    'overnet-relay-service.pl');
 my $irc_command          = File::Spec->catfile($irc_root,  'bin',    'overnet-irc-server');

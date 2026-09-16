@@ -154,10 +154,8 @@ subtest 'constructor validates argument shapes' => sub {
     qr/constructor\ arguments\ must\ be\ a\ hash\ or\ hash\ reference/mx,
     'odd argument lists are rejected';
   like dies { Overnet::Relay::Store::File->new }, qr/path\ is\ required/mx, 'a path is required';
-  like dies { Overnet::Relay::Store::File->new(path => q{}) },
-    qr/path\ is\ required/mx, 'an empty path is rejected';
-  like dies { Overnet::Relay::Store::File->new(path => {}) },
-    qr/path\ is\ required/mx, 'a ref path is rejected';
+  like dies { Overnet::Relay::Store::File->new(path => q{}) }, qr/path\ is\ required/mx, 'an empty path is rejected';
+  like dies { Overnet::Relay::Store::File->new(path => {}) },  qr/path\ is\ required/mx, 'a ref path is rejected';
 };
 
 subtest 'duplicate stores and missing deletions append nothing' => sub {
@@ -190,8 +188,7 @@ subtest 'load tolerates blank lines and a torn final record' => sub {
   my $added = _event(content => 'after torn', created_at => 1_700_000_061);
   $store->store($added);
   my $reloaded = Overnet::Relay::Store::File->new(path => $path);
-  is _ids($reloaded), [sort ($event->id, $added->id)],
-    'the first write normalizes the file and drops the torn tail';
+  is _ids($reloaded), [sort ($event->id, $added->id)], 'the first write normalizes the file and drops the torn tail';
 };
 
 subtest 'load rejects genuinely corrupt store files' => sub {
@@ -226,7 +223,7 @@ subtest 'load rejects genuinely corrupt store files' => sub {
     qr/contains\ an\ unrecognized\ record/mx, 'a tombstone without a scalar id is rejected';
 };
 
-subtest 'legacy loads skip junk entries and empty legacy stores stay appendable' => sub {
+subtest 'legacy corruption fails closed and empty legacy stores stay appendable' => sub {
   my $dir  = tempdir(CLEANUP => 1);
   my $path = "$dir/store.json";
 
@@ -235,8 +232,8 @@ subtest 'legacy loads skip junk entries and empty legacy stores stay appendable'
   print {$fh} $JSON->encode([$event->to_hash, 'junk', 42]) . "\n" or die "write $path: $!";
   close $fh;
 
-  my $store = Overnet::Relay::Store::File->new(path => $path);
-  is _ids($store), [$event->id], 'non-hash entries inside a legacy array are skipped';
+  like dies { Overnet::Relay::Store::File->new(path => $path) },
+    qr/Invalid event in legacy relay store/, 'corrupt legacy evidence is not silently discarded';
 
   my $empty_path = "$dir/empty-legacy.json";
   open my $empty_fh, '>:raw', $empty_path or die "open $empty_path: $!";
@@ -284,8 +281,8 @@ subtest 'append write failures are reported' => sub {
   my $close_fail = Overnet::Relay::Store::File->new(path => "$dir/close-fail.json");
   $close_fail->path('/dev/full');
   like dies { $close_fail->store($event) },
-    qr/Can't\ close\ relay\ store\ file .* after\ appending/mx,
-    'a small append croaks when the flush at close fails';
+    qr/Can't\ sync\ relay\ store\ file/mx,
+    'a small append croaks when the durability flush fails';
 
   my $print_fail = Overnet::Relay::Store::File->new(path => "$dir/print-fail.json");
   $print_fail->path('/dev/full');
@@ -312,10 +309,12 @@ subtest 'unwritable compaction targets are reported' => sub {
   my $next = _event(content => 'compaction trigger', created_at => 1_700_000_101);
 
   my $blocked_tmp = _legacy_store($dir, 'blocked-tmp.json', content => 'small');
-  mkdir $blocked_tmp->path . '.tmp.' . $$ or die "mkdir: $!";
-  like dies { $blocked_tmp->store($next) },
-    qr/Can't\ open\ relay\ store\ temp\ file .* for\ writing/mx,
-    'an unopenable temp file croaks the compaction';
+  {
+    no warnings 'redefine';
+    local *Overnet::Relay::Store::File::tempfile = sub { die 'Cannot create temporary store' };
+    like dies { $blocked_tmp->store($next) }, qr/Cannot create temporary store/,
+      'temp creation failure prevents the mutation';
+  }
 
   my $rename_fail = _legacy_store($dir, 'rename-fail.json', content => 'small');
   mkdir "$dir/rename-target" or die "mkdir: $!";
@@ -332,17 +331,18 @@ subtest 'compaction write failures are reported' => sub {
   my $dir  = tempdir(CLEANUP => 1);
   my $next = _event(content => 'compaction trigger', created_at => 1_700_000_102);
 
-  my $close_fail = _legacy_store($dir, 'close-fail.json', content => 'small');
-  symlink '/dev/full', $close_fail->path . '.tmp.' . $$ or die "symlink: $!";
-  like dies { $close_fail->store($next) },
-    qr/Can't\ close\ relay\ store\ temp\ file/mx,
-    'a small compaction croaks when the flush at close fails';
-
-  my $print_fail = _legacy_store($dir, 'print-fail.json', content => 'y' x 70_000);
-  symlink '/dev/full', $print_fail->path . '.tmp.' . $$ or die "symlink: $!";
-  like dies { $print_fail->store($next) },
-    qr/Can't\ write\ relay\ store\ temp\ file/mx,
-    'an oversized compaction croaks at print';
+  for my $content ('small', 'y' x 70_000) {
+    my $store = _legacy_store($dir, 'write-fail-' . length($content), content => $content);
+    no warnings 'redefine';
+    local *Overnet::Relay::Store::File::tempfile = sub {
+      open my $fh, '>:raw', '/dev/full' or die $!;
+      return ($fh, '/dev/full');
+    };
+    like dies { $store->store($next) }, qr/Can't (?:sync|write) relay store temp file/,
+      'failed compaction write or sync prevents publication';
+    like dies { $store->all_events }, qr/unavailable after a persistence failure/,
+      'failed store refuses subsequent reads';
+  }
 };
 
 subtest 'missing store directories are created on first write' => sub {
@@ -353,8 +353,26 @@ subtest 'missing store directories are created on first write' => sub {
   my $event = _event(content => 'nested', created_at => 1_700_000_110);
   $store->store($event);
   ok -f $path, 'the store file lands in the created directory';
-  is _ids(Overnet::Relay::Store::File->new(path => $path)), [$event->id],
-    'the nested store reloads';
+  is _ids(Overnet::Relay::Store::File->new(path => $path)), [$event->id], 'the nested store reloads';
+};
+
+subtest 'periodic compaction failure poisons the store without losing its durable append' => sub {
+  my $dir   = tempdir(CLEANUP => 1);
+  my $path  = "$dir/periodic.json";
+  my $store = Overnet::Relay::Store::File->new(path => $path);
+  my $first = _event(content => 'first', created_at => 1_700_000_111);
+  my $next  = _event(content => 'next',  created_at => 1_700_000_112);
+  $store->store($first);
+  $store->{_records_on_disk} = 127;
+  {
+    no warnings 'redefine';
+    local *Overnet::Relay::Store::File::tempfile = sub { die 'Cannot compact store' };
+    like dies { $store->store($next) }, qr/Cannot compact store/, 'failed periodic compaction is reported';
+  }
+  like dies { $store->all_events }, qr/unavailable after a persistence failure/,
+    'the failed instance refuses subsequent reads';
+  is [sort @{_ids(Overnet::Relay::Store::File->new(path => $path))}], [sort ($first->id, $next->id)],
+    'reopening recovers both records already appended durably';
 };
 
 done_testing;

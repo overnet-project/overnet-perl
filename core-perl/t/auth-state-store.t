@@ -186,7 +186,7 @@ subtest 'filesystem failures surface as croaks' => sub {
   my $full_small = File::Spec->catfile($dir, 'full-small.json');
   symlink '/dev/full', "$full_small.tmp.$$" or die "symlink failed: $!";
   $error = eval { Overnet::Auth::StateStore->new(path => $full_small)->save_state(state => {}); 1 } ? undef : $@;
-  like $error, qr/close\ .*\.tmp\.\d+\ failed/mx, 'a full device fails on close';
+  like $error, qr/open\ .*\.tmp\.\d+\ failed/mx, 'a planted symlink is refused before opening';
 
   my $full_big = File::Spec->catfile($dir, 'full-big.json');
   symlink '/dev/full', "$full_big.tmp.$$" or die "symlink failed: $!";
@@ -195,8 +195,8 @@ subtest 'filesystem failures surface as croaks' => sub {
       ->save_state(state => {sessions => [{blob => ('x' x 300_000)}]});
     1;
   } ? undef : $@;
-  like $error, qr/(?:(?:write|close)\ .*\ failed|No\ space\ left\ on\ device)/mx,
-    'a full device fails on buffered writes';
+  like $error, qr/open\ .*\ failed/mx,
+    'large writes also refuse an existing temp-file symlink';
 
   my $occupied = File::Spec->catdir($dir, 'occupied');
   mkdir $occupied or die "mkdir $occupied failed: $!";
@@ -204,6 +204,22 @@ subtest 'filesystem failures surface as croaks' => sub {
   close $keep or die "close keep failed: $!";
   $error = eval { Overnet::Auth::StateStore->new(path => $occupied)->save_state(state => {}); 1 } ? undef : $@;
   like $error, qr/rename\ .*\ failed/mx, 'renames over occupied paths fail';
+};
+
+subtest 'sync failure preserves previous state and cleans its temporary file' => sub {
+  my $dir = tempdir(CLEANUP => 1);
+  my $path = File::Spec->catfile($dir, 'durable.json');
+  my $store = Overnet::Auth::StateStore->new(path => $path);
+  $store->save_state(state => {policies => [{policy_id => 'original'}]});
+  {
+    no warnings 'redefine';
+    local *IO::Handle::sync = sub { return 0; };
+    my $ok = eval { $store->save_state(state => {policies => []}); 1 };
+    ok !$ok, 'sync failure cannot report success';
+    like $@, qr/sync.*failed/, 'failure describes the failed operation';
+  }
+  is_deeply $store->load_state->{policies}, [{policy_id => 'original'}], 'prior trusted state survives failed replacement';
+  ok !-e "$path.tmp.$$", 'failed temporary file removed';
 };
 
 done_testing;

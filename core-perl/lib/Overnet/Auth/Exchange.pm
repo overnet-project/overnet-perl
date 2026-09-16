@@ -29,7 +29,7 @@ sub delegation_request {
     [server     => $args{scope}],
     [delegate   => $args{delegate_pubkey}],
     [session    => $args{session_id}],
-    [expires_at => $args{expires_at}],
+    [expires_at => defined($args{expires_at}) ? q{} . $args{expires_at} : undef],
   );
   if (_nonempty_scalar($args{nick})) {
     push @tags, [nick => $args{nick}];

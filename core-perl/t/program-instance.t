@@ -693,12 +693,9 @@ subtest 'shutdown lifecycle handles every message shape' => sub {
     {},
     'other notifications are ignored after shutdown',
   );
-  ok(
-    defined $instance->process_program_message(
-      Overnet::Program::Protocol::build_response_ok(id => 'post-shutdown'),
-    ),
-    'responses are tolerated after shutdown',
-  );
+  like dies { $instance->process_program_message(
+    Overnet::Program::Protocol::build_response_ok(id => 'post-shutdown')) },
+    qr/protocol[.]unknown_request_id/, 'unknown responses remain invalid after shutdown';
   is(
     $instance->process_program_message(
       Overnet::Program::Protocol::build_request(id => 'r-10', method => 'storage.put', params => {}),
@@ -825,6 +822,69 @@ subtest 'explicit config exposes the service handler type guard' => sub {
   );
   ok(!$refused->{send}{ok}, 'reading an unknown storage key fails');
   is($refused->{send}{error}{details}{key}, 'absent', 'the error details identify the missing key');
+};
+
+subtest 'unknown methods return a correlated error without killing a ready session' => sub {
+  my $instance = _ready_instance();
+  my $reply = $instance->process_program_message({type => 'request', id => 'unknown', method => 'future.method'});
+  is $reply->{send}{id}, 'unknown', 'request id is preserved';
+  is $reply->{send}{error}{code}, 'protocol.unknown_method', 'unknown method is explicit';
+  is $instance->current_state, 'ready', 'session stays usable';
+};
+
+subtest 'self-reported hello identity cannot satisfy a secret policy' => sub {
+  for my $trusted (undef, 'different.program', 'irc.example') {
+    my $runtime = Overnet::Program::Runtime->new(
+      secrets => {token => 'never return this'},
+      secret_policies => {token => {allowed_program_ids => ['irc.example']}},
+    );
+    my $instance = _ready_instance(
+      (defined($trusted) ? (program_id => $trusted) : ()),
+      permissions => ['secrets.read'],
+      service_handler => Overnet::Program::Services->new(runtime => $runtime),
+    );
+    my $reply = $instance->process_program_message(
+      Overnet::Program::Protocol::build_request(id => 'secret-audit', method => 'secrets.get', params => {name => 'token'}));
+    is !!$reply->{send}{ok}, !!(defined($trusted) && $trusted eq 'irc.example'),
+      'only host-configured identity authorizes the secret';
+  }
+};
+
+subtest 'invalid parameters are recoverable but unmatched responses remain protocol errors' => sub {
+  my $instance = _ready_instance();
+  my $reply = $instance->process_program_message({type => 'request', id => 'bad-params', method => 'storage.get', params => []});
+  is $reply->{send}{error}{code}, 'protocol.invalid_params', 'malformed params receive correlated error';
+  is $reply->{send}{id}, 'bad-params', 'error retains request id';
+  my $shutdown = $instance->request_shutdown;
+  $instance->process_program_message(Overnet::Program::Protocol::build_response_ok(id => $shutdown->{send}{id}));
+  like dies { $instance->process_program_message(Overnet::Program::Protocol::build_response_ok(id => 'never-issued')) },
+    qr/unknown_request_id/, 'unsolicited response after shutdown remains invalid';
+  my $aborted = _ready_instance();
+  $aborted->abort_session;
+  is $aborted->current_state, 'failed', 'standalone instance supports fatal transport termination';
+  is $aborted->inflight_request_ids, [], 'aborted session retains no pending request authority';
+};
+
+subtest 'malformed envelopes are fatal rather than service errors' => sub {
+  for my $instance (Overnet::Program::Instance->new(supported_protocol_versions => ['0.1']), _ready_instance()) {
+    like dies { $instance->process_program_message({type => 'notification', method => 'program.log', params => []}) },
+      qr/protocol[.]invalid_params/, 'notification validation errors are fatal in every phase';
+    like dies { $instance->process_program_message({type => 'request', id => [], method => 'storage.get'}) },
+      qr/protocol[.]/, 'a malformed request identifier cannot receive a correlated service reply';
+  }
+};
+
+subtest 'service errors without optional details keep request correlation' => sub {
+  my $services = Overnet::Program::Services->new(runtime => Overnet::Program::Runtime->new);
+  $services->bus->handlers->{'storage.get'} = sub {
+    die {code => 'runtime.service_unavailable', message => 'Storage temporarily unavailable'};
+  };
+  my $instance = _ready_instance(service_handler => $services, permissions => ['storage.read']);
+  my $reply = $instance->process_program_message(
+    Overnet::Program::Protocol::build_request(id => 'storage-failure', method => 'storage.get', params => {key => 'key'}));
+  is $reply->{send}{id}, 'storage-failure', 'request correlation survives a backend failure';
+  is $reply->{send}{error}, {code => 'runtime.service_unavailable', message => 'Storage temporarily unavailable'},
+    'optional details remain absent';
 };
 
 done_testing;

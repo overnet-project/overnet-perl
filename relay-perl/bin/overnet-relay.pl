@@ -210,7 +210,7 @@ sub _parse_service_policies {
 sub _load_profile_contracts {
   my (@paths) = @_;
   my @contracts;
-  my $json = JSON->new->utf8;
+  require Overnet::Core::JSON;
 
   for my $path (@paths) {
     die "--profile-contract must be a non-empty string\n"
@@ -222,7 +222,7 @@ sub _load_profile_contracts {
     close $fh
       or die "Can't close profile contract file $path: $!\n";
 
-    my $contract = eval { $json->decode($content) };
+    my $contract = eval { Overnet::Core::JSON::decode_json($content) };
     die "invalid profile contract JSON in $path: $@\n" if $@;
     die "profile contract file $path must contain a JSON object\n"
       unless ref($contract) eq 'HASH';

@@ -68,7 +68,7 @@ sub _reference_group_events {
       push @events, $event;
     }
   }
-  return sort { Overnet::Authority::HostedChannel::Relay::_compare_group_events($a, $b) } @events;
+  return @{Overnet::Authority::HostedChannel::ordered_events(\@events, snapshot_signers => $snapshot_signers)};
 }
 
 # A deliberately awkward corpus: two groups, control and snapshot kinds, the

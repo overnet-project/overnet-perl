@@ -335,7 +335,7 @@ subtest 'services normalize real IRC adapter outputs and support derive operatio
     },
     permissions => ['adapters.use'],
   );
-  is $derived->{state}[0]{kind}, 37800, 'real adapter derived state is normalized to state array';
+  is $derived->{events}[0]{kind}, 7800, 'presence is an immutable event independent of topic state';
 };
 
 subtest 'services open, use, derive, and close adapter sessions' => sub {
@@ -552,6 +552,7 @@ subtest
       input              => {},
     },
     permissions => ['adapters.use'],
+    session_id => 'session-1',
   );
   is $mapped->{events}[0]{session_mode}, 'secure', 'non-secret session config still flows through session methods';
 
@@ -561,6 +562,7 @@ subtest
       adapter_session_id => $opened->{adapter_session_id},
     },
     permissions => ['adapters.use'],
+    session_id => 'session-1',
     ),
     {}, 'secure adapter session closes cleanly';
   is scalar @{$adapter->{closed_sessions}}, 1, 'adapter close_session hook was called';

@@ -337,7 +337,7 @@ subtest 'relay process serves live object reads over HTTP' => sub {
     my $response = _http_request(
       port    => $port,
       request => join("\r\n",
-        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23overnet HTTP/1.1',
+        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23overnet&author=' . $state_event->pubkey . ' HTTP/1.1',
         'Host: 127.0.0.1',
         'Accept: application/json',
         'Connection: close',
@@ -408,7 +408,7 @@ subtest 'relay process persists live object state across restart and suppresses 
     my $response = _http_request(
       port    => $port,
       request => join("\r\n",
-        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23persist HTTP/1.1',
+        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23persist&author=' . $state_event->pubkey . ' HTTP/1.1',
         'Host: 127.0.0.1',
         'Accept: application/json',
         'Connection: close',
@@ -533,7 +533,7 @@ subtest 'relay backup script copies persisted relay state for restore' => sub {
     my $response = _http_request(
       port    => $port,
       request => join("\r\n",
-        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23backup HTTP/1.1',
+        'GET /.well-known/overnet/v1/object?type=chat.channel&id=irc%3Alive%3A%23backup&author=' . $state_event->pubkey . ' HTTP/1.1',
         'Host: 127.0.0.1',
         'Accept: application/json',
         'Connection: close',

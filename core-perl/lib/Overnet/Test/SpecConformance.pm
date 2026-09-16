@@ -106,8 +106,9 @@ sub run_auth_agent_conformance {
         require Overnet::Auth::Agent;
 
         my $agent =
-          Overnet::Auth::Agent->new(%{$input->{agent} || {}});
-        my $response = $agent->dispatch($input->{request});
+          Overnet::Auth::Agent->new(%{$input->{agent} || {}}, clock => sub { $input->{now} // 1_776_880_745 });
+        my $caller   = $input->{caller} || {};
+        my $response = $agent->dispatch($input->{request}, caller => $caller->{authenticated} ? $caller : {});
 
         if (ref($expected->{response}) eq 'HASH') {
           ok(_subset_match($response, $expected->{response}), 'response contains expected fields',);
@@ -1506,7 +1507,7 @@ sub _spec_root {
     File::Spec->catdir(dirname(__FILE__), q{..}, q{..}, q{..}, q{..}, q{..}, q{spec}),
   ) {
     my $abs = File::Spec->rel2abs($dir);
-    if (-d $abs) {
+    if (-f File::Spec->catfile($abs, 'docs', 'core.md')) {
       return $abs;
     }
   }

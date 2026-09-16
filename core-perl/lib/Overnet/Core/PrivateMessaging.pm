@@ -3,7 +3,10 @@ package Overnet::Core::PrivateMessaging;
 use strictures 2;
 use English qw(-no_match_vars);
 
-use JSON ();
+use JSON                              ();
+use B                                 ();
+use Overnet::Core::JSON               ();
+use Overnet::Authority::HostedChannel ();
 use Net::Nostr::GiftWrap;
 
 our $VERSION = '0.001';
@@ -103,7 +106,7 @@ sub _create_rumor_event {
     created_at => $rumor_data->{created_at},
     kind       => $rumor_data->{kind},
     tags       => $rumor_data->{tags},
-    content    => $JSON->encode($payload),
+    content    => ref($rumor_data->{content}) eq 'HASH' ? $JSON->encode($payload) : $rumor_data->{content},
   );
 
   my $rumor_event;
@@ -117,6 +120,11 @@ sub _create_rumor_event {
     push @{$errors}, "Invalid NIP-17 rumor: $err";
   }
 
+  if ( $rumor_event
+    && exists($rumor_data->{id})
+    && (!defined($rumor_data->{id}) || ref($rumor_data->{id}) || $rumor_data->{id} ne $rumor_event->id)) {
+    push @{$errors}, 'Decrypted rumor id does not match its original content';
+  }
   return $rumor_event;
 }
 
@@ -128,8 +136,15 @@ sub _validate_rumor_event {
   }
 
   my @recipient_tags =
-    grep { ref eq 'ARRAY' && @{$_} >= 2 && $_->[0] eq 'p' } @{$rumor_event->tags};
-  if (!(@recipient_tags == 1)) {
+    grep { ref eq 'ARRAY' && @{$_} && $_->[0] eq 'p' } @{$rumor_event->tags};
+  if (
+    !(
+         @recipient_tags == 1
+      && defined($recipient_tags[0][1])
+      && !ref($recipient_tags[0][1])
+      && $recipient_tags[0][1] =~ /\A[0-9a-f]{64}\z/mxs
+    )
+  ) {
     push @errors, 'Relay-carried one-to-one private direct messages require exactly one rumor p tag';
   }
 
@@ -197,7 +212,7 @@ sub _validate_opaque_transport {
   };
 
   push @errors, _validate_opaque_metadata(%{$details});
-  push @errors, _validate_opaque_recipients($transport);
+  push @errors, validate_transport_recipients($transport);
   push @errors, _validate_opaque_source_binding($input, $details);
 
   return {%{$details}, errors => \@errors};
@@ -211,11 +226,18 @@ sub _has_opaque_metadata {
     && defined $input->{object_id} ? 1 : 0;
 }
 
-sub _validate_opaque_recipients {
+sub validate_transport_recipients {
   my ($transport) = @_;
+  return ('Opaque transport tags must be an array') if ref($transport->{tags}) ne 'ARRAY';
   my @recipient_tags =
-    grep { ref eq 'ARRAY' && @{$_} >= 2 && $_->[0] eq 'p' } @{$transport->{tags} || []};
-  return @recipient_tags == 1 ? () : ('Opaque private direct messages require exactly one visible transport p tag');
+    grep { ref eq 'ARRAY' && @{$_} && $_->[0] eq 'p' } @{$transport->{tags}};
+  return
+       @recipient_tags == 1
+    && defined($recipient_tags[0][1])
+    && !ref($recipient_tags[0][1])
+    && $recipient_tags[0][1] =~ /\A[0-9a-f]{64}\z/mxs
+    ? ()
+    : ('Opaque private direct messages require exactly one visible transport p tag');
 }
 
 sub _validate_opaque_source_binding {
@@ -278,7 +300,7 @@ sub _normalize_payload {
   }
 
   my $decoded;
-  my $decode_ok = eval { $decoded = $JSON->decode($content); 1 };
+  my $decode_ok = eval { $decoded = Overnet::Core::JSON::decode_json($content); 1 };
   if (!$decode_ok || ref($decoded) ne 'HASH') {
     return (undef, 'Decrypted rumor content must decode to a JSON object');
   }
@@ -290,6 +312,11 @@ sub _validate_payload {
   my ($payload) = @_;
   my @errors;
 
+  for my $field (qw(pubkey created_at)) {
+    if (exists $payload->{$field}) {
+      push @errors, "Private-message payload must not duplicate rumor $field";
+    }
+  }
   if (!_is_non_empty_string($payload->{overnet_v})) {
     push @errors, 'Private-message payload overnet_v must be a non-empty string';
   }
@@ -313,7 +340,7 @@ sub _validate_payload {
     push @errors, 'Private-message payload body must be an object';
   } elsif (!exists $payload->{body}{text}
     || !defined $payload->{body}{text}
-    || ref($payload->{body}{text})) {
+    || !_is_string($payload->{body}{text})) {
     push @errors, 'Private-message payload body.text must be a string';
   }
 
@@ -362,7 +389,7 @@ sub _validate_irc_decrypted_binding {
     push @errors, 'IRC private-message binding source.line must use PRIVMSG or NOTICE';
   }
 
-  my $expected_object_id = "irc:$network:dm:$target";
+  my $expected_object_id = "irc:$network:dm:" . Overnet::Authority::HostedChannel::irc_casefold($target);
   if (!(($payload->{object_id} // q{}) eq $expected_object_id)) {
     push @errors, "IRC private-message binding object_id must be $expected_object_id";
   }
@@ -425,7 +452,7 @@ sub _validate_irc_opaque_binding {
     push @errors, 'Opaque private-message binding object_type must be chat.dm';
   }
 
-  my $expected_object_id = "irc:$network:dm:$parsed->{target}";
+  my $expected_object_id = "irc:$network:dm:" . Overnet::Authority::HostedChannel::irc_casefold($parsed->{target});
   if (!(($args{object_id} // q{}) eq $expected_object_id)) {
     push @errors, "IRC private-message binding object_id must be $expected_object_id";
   }
@@ -525,7 +552,12 @@ sub _validate_provenance {
 
 sub _is_non_empty_string {
   my ($value) = @_;
-  return defined $value && !ref($value) && length $value;
+  return _is_string($value) && length $value;
+}
+
+sub _is_string {
+  my ($value) = @_;
+  return defined($value) && !ref($value) && (B::svref_2object(\$value)->FLAGS & B::SVp_POK());
 }
 
 sub _is_string_array {
@@ -534,7 +566,7 @@ sub _is_string_array {
     return 0;
   }
   for my $item (@{$value}) {
-    if (!defined $item || ref($item)) {
+    if (!_is_string($item)) {
       return 0;
     }
   }
@@ -583,9 +615,18 @@ This module is part of the Overnet Perl implementation.
 
 =head1 SUBROUTINES/METHODS
 
+=head2 validate_transport_recipients
+
+Returns errors for visible recipient tags on a signed gift wrap.
+
 =head2 validate_transport
 
-Public API entry point.
+Checks private-message semantics, optionally using trusted decrypted context.
+This API accepts unsigned semantic fixtures; ingress must separately verify the
+complete transport signature. It never decrypts or proves pairing of plaintext
+with ciphertext. Only trusted plaintext-boundary components may supply that
+context. Returned rumor content is a decoded convenience object; its ID is
+computed from the original wire content when that content was supplied as text.
 
 =head1 DIAGNOSTICS
 

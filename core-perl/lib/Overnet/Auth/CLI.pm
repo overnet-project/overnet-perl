@@ -1,8 +1,9 @@
 package Overnet::Auth::CLI;
 
 use strictures 2;
-use Carp    qw(croak);
-use English qw(-no_match_vars);
+use Overnet::Core::JSON ();
+use Carp                qw(croak);
+use English             qw(-no_match_vars);
 
 use Getopt::Long qw(GetOptionsFromArray);
 use JSON         ();
@@ -313,7 +314,7 @@ sub _artifacts {
 
 sub _decode_artifact_json {
   my ($class, $json, $source) = @_;
-  my $artifact = eval { JSON->new->utf8->decode($json) };
+  my $artifact = eval { Overnet::Core::JSON::decode_json($json) };
   if (!(defined $artifact)) {
     croak "$source did not contain valid JSON: $EVAL_ERROR";
   }

@@ -1,7 +1,8 @@
 package Overnet::Auth::Bridge::IRC;
 
 use strictures 2;
-use Carp qw(croak);
+use Overnet::Core::JSON ();
+use Carp                qw(croak);
 
 use JSON         ();
 use MIME::Base64 qw(encode_base64 decode_base64);
@@ -61,7 +62,7 @@ sub decode_artifact {
   return {
     type   => 'nostr.event',
     format => 'nostr.event',
-    value  => JSON::decode_json(decode_base64($payload)),
+    value  => Overnet::Core::JSON::decode_base64_json($payload),
   };
 }
 

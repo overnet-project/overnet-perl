@@ -216,7 +216,7 @@ sub _build_authoritative_delegate_payload {
       ['server',     $args{scope}],
       ['delegate',   $args{delegate_pubkey}],
       ['session',    $args{session_id}],
-      ['expires_at', $args{expires_at}],
+      ['expires_at', q{} . $args{expires_at}],
       (defined($args{nick}) ? (['nick', $args{nick}]) : ()),
     ],
   );
@@ -245,6 +245,7 @@ sub _publish_nostr_event_to_relay {
 
   $client->connect($args{relay_url});
   $client->publish($wire);
+  my $deadline = AnyEvent->timer(after => 10, cb => sub { $cv->croak('relay publication timed out') });
   my $result = $cv->recv;
   $client->disconnect;
   return $result;
@@ -274,7 +275,8 @@ sub _run_relay_backup {
 
 my $code_root    = File::Spec->catdir($FindBin::Bin, '..');
 my $project_root = File::Spec->catdir($code_root,    '..');
-my $irc_root     = File::Spec->catdir($project_root, 'irc-server');
+my $irc_root = File::Spec->catdir($project_root, 'irc-server');
+$irc_root = File::Spec->catdir($project_root, '..', 'irc-server') if !-f File::Spec->catfile($irc_root, 'bin', 'overnet-irc-server');
 
 my $relay_backup_script = File::Spec->catfile($code_root, 'bin', 'overnet-relay-backup.pl');
 my $irc_command         = File::Spec->catfile($irc_root,  'bin', 'overnet-irc-server');
@@ -370,7 +372,7 @@ subtest 'backup-restored authoritative relay service plus fresh IRC service rest
         ['server',     "irc://$server_name/$network"],
         ['delegate',   $session_key->pubkey_hex],
         ['session',    'deploy-restore-session-1'],
-        ['expires_at', '1744400000'],
+        ['expires_at', q{} . int(time + 3600)],
       ],
     )->to_hash;
     my $joined = $session_key->create_event(
@@ -381,7 +383,7 @@ subtest 'backup-restored authoritative relay service plus fresh IRC service rest
         ['h',                 $group_id],
         ['overnet_actor',     $alice_pubkey],
         ['overnet_authority', $grant->{id}],
-        ['overnet_sequence',  1],
+        ['overnet_sequence',  '1'],
       ],
     )->to_hash;
 
@@ -425,7 +427,7 @@ subtest 'backup-restored authoritative relay service plus fresh IRC service rest
         ['ban',               '*!*@blocked.example'],
         ['overnet_actor',     $alice_pubkey],
         ['overnet_authority', $grant->{id}],
-        ['overnet_sequence',  2],
+        ['overnet_sequence',  '2'],
       ],
     )->to_hash;
     my $restored_metadata_publish = _publish_nostr_event_to_relay(
@@ -463,7 +465,7 @@ subtest 'backup-restored authoritative relay service plus fresh IRC service rest
       50,                   '--authority-relay-query-timeout-ms',
       3_000,                '--health-file',
       $irc_health,          '--log-file',
-      $irc_log,
+      $irc_log, '--snapshot-pubkey', $seed_key->pubkey_hex,
     );
     local $CURRENT_IRC_STDERR = $irc_proc->{stderr};
 

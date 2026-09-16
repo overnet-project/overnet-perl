@@ -12,7 +12,7 @@ use Overnet::Core::ProfileContract ();
 our $VERSION = '0.001';
 
 my %VALID_POLICY    = map { $_ => 1 } qw(off known required);
-my %CORE_EVENT_TYPE = map { $_ => 1 } qw(core.delegation core.removal);
+my %CORE_EVENT_TYPE = map { $_ => 1 } qw(core.delegation core.removal core.adapter_authority);
 
 has contracts     => (is => 'ro', reader => '_contracts');
 has policy        => (is => 'ro', reader => '_policy');
@@ -38,9 +38,8 @@ sub BUILDARGS {
   if (ref($policy) || !$VALID_POLICY{$policy}) {
     croak 'profile_contract_policy must be off, known, or required';
   }
-  if (!@contracts) {
-    $policy = 'off';
-  }
+  croak 'required profile contract policy needs at least one contract'
+    if !@contracts && $policy eq 'required';
 
   my $contract_set_result = Overnet::Core::ProfileContract::validate_contract_set(\@contracts);
   if (!$contract_set_result->{valid}) {
@@ -109,12 +108,8 @@ sub validate_event {
     return;
   }
 
-  # uncoverable branch true reason: BUILDARGS forces the policy to off when no contracts are configured
-  if (!@{$self->{contracts}}) {
-    return;    # uncoverable statement reason: unreachable while an empty contract set implies the off policy
-  }
-
   my $event_type_name = _event_type_name($event);
+  return if defined $event_type_name && $CORE_EVENT_TYPE{$event_type_name};
   my $matches =
     defined $event_type_name
     ? ($self->{by_event_type}{$event_type_name} || [])
@@ -124,22 +119,13 @@ sub validate_event {
     if ($self->{policy} eq 'known') {
       return;
     }
-    if (defined $event_type_name && $CORE_EVENT_TYPE{$event_type_name}) {
-      return;
-    }
     return 'profile_event.event_type_undefined';
   }
 
-  my $result =
-    @{$matches} == 1
-    ? Overnet::Core::ProfileContract::validate_profile_event(
-    event    => $event,
-    contract => $matches->[0],
-    )
-    : Overnet::Core::ProfileContract::validate_profile_event(
+  my $result = Overnet::Core::ProfileContract::validate_profile_event(
     event     => $event,
     contracts => $self->{contracts},
-    );
+  );
 
   return $result->{valid} ? undef : ($result->{reason} // $result->{errors}[0]);
 }

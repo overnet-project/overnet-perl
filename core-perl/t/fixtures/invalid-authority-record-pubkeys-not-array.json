@@ -14,7 +14,7 @@
       "tags" : [
          [
             "d",
-            "irc:irc.libera.chat"
+            "urn:overnet:adapter-authority:697263:6972632e6c69626572612e63686174"
          ],
          [
             "overnet_v",
@@ -30,7 +30,7 @@
          ],
          [
             "overnet_oid",
-            "irc:irc.libera.chat"
+            "urn:overnet:adapter-authority:697263:6972632e6c69626572612e63686174"
          ],
          [
             "v",

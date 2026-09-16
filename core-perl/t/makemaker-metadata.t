@@ -26,7 +26,11 @@ is(
   },
   'configure prerequisites include modules required to load Makefile.PL',
 );
-is($args->{EXE_FILES}, ['bin/overnet-auth.pl', 'bin/overnet-auth-agent.pl',], 'auth scripts are installed',);
+is(
+  $args->{EXE_FILES},
+  ['bin/overnet-auth.pl', 'bin/overnet-auth-agent.pl', 'bin/overnet-auth-native.pl',],
+  'auth scripts are installed',
+);
 
 is(
   $args->{PREREQ_PM},
@@ -74,6 +78,7 @@ is(
         t/auth-daemon-cli.t
         t/auth-daemon.t
         t/auth-exchange.t
+        t/auth-native-messaging.t
         t/auth-readme.t
         t/auth-socket-io.t
         t/auth-state-store.t

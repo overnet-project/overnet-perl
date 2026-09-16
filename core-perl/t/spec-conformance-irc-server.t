@@ -5,11 +5,15 @@ use File::Spec;
 use JSON ();
 use Test2::V0;
 
-use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server',       'lib');
+use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib');
+use lib File::Spec->catdir($FindBin::Bin, '..', '..', '..', 'irc-server', 'lib');
 use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'relay-perl',       'lib');
 use lib File::Spec->catdir($FindBin::Bin, '..', '..', 'adapter-irc-perl', 'lib');
 
-my $IRC_SERVER_LIB = File::Spec->rel2abs(File::Spec->catdir($FindBin::Bin, '..', '..', 'irc-server', 'lib'));
+my ($IRC_SERVER_LIB) = grep { -f File::Spec->catfile($_, 'Overnet', 'Program', 'IRC', 'Server.pm') }
+  map { File::Spec->rel2abs(File::Spec->catdir($FindBin::Bin, @$_, 'irc-server', 'lib')) }
+  (['..', '..'], ['..', '..', '..']);
+$IRC_SERVER_LIB //= 'a sibling irc-server/lib';
 
 if (!-d $IRC_SERVER_LIB) {
   skip_all("irc-server checkout not found at $IRC_SERVER_LIB");
@@ -191,8 +195,9 @@ subtest 'harness nostr filter matching' => sub {
   is($server->_spec_nostr_events_for_filters(undef), [], 'missing filters match nothing');
   is($server->_spec_nostr_events_for_filters([]),    [], 'empty filters match nothing');
 
-  my $match  = {kind => 39_000, id => ('1' x 64), tags => [['h', 'ops']]};
-  my $other  = {kind => 39_001, id => ('2' x 64), tags => [['h', 'ops']]};
+  my $match  = {kind => 39_000, id => ('1' x 64), created_at => 1, pubkey => 'a' x 64, tags => [['h', 'ops']]};
+  my $other  = {kind => 39_001, id => ('2' x 64), created_at => 2, pubkey => 'a' x 64, tags => [['h', 'ops']]};
+  $server->{config}{adapter_config}{snapshot_pubkeys} = ['a' x 64];
   $server->{_spec_authoritative_channels} = {
     '#ops'   => {events => [$match, $match, 'junk', $other]},
     '#empty' => 'junk',
