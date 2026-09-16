@@ -80,7 +80,7 @@ jobs:
           upload-release-assets: false
 
       - name: Validate the SPDX SBOM
-        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:cpan/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
+        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:generic/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
 
       - name: Upload the validated SPDX SBOM
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -242,7 +242,7 @@ jobs:
           upload-release-assets: false
 
       - name: Validate the published SPDX SBOM
-        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:cpan/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
+        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:generic/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
 
       - name: Upload the validated published SPDX SBOM
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -276,7 +276,7 @@ jobs:
           path: ${{ runner.temp }}/sbom
 
       - name: Revalidate the downloaded SPDX SBOM
-        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:cpan/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/sbom/overnet-relay.spdx.json"
+        run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:generic/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/sbom/overnet-relay.spdx.json"
 
       - name: Log in to Quay for SBOM attestation
         env:

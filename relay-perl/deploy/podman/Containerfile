@@ -57,7 +57,8 @@ RUN sh /build/core-perl/maint/install-net-nostr.sh \
   && perl Makefile.PL \
   && make test \
   && make pure_install \
-  && sh /build/core-perl/maint/install-net-nostr.sh \
+  && OVERNET_NOSTR_METADATA_FILE=/build/Net-Nostr-Core-MYMETA.json \
+      sh /build/core-perl/maint/install-net-nostr.sh \
       --notest --local-lib-contained /runtime-local \
   && cpanm --notest --local-lib-contained /runtime-local \
       --installdeps /build/core-perl \
@@ -163,6 +164,7 @@ RUN install -d -m 0755 \
       --root /runtime-root/opt/overnet/perl5 \
       --local-metadata /build/core-perl/MYMETA.json=Overnet \
       --local-metadata /build/relay-perl/MYMETA.json=Overnet::Relay \
+      --local-metadata /build/Net-Nostr-Core-MYMETA.json=Net::Nostr::Core \
       --output /runtime-root/usr/share/overnet/sbom/perl-distributions.spdx.json \
   && PERL5LIB=/audit-local/lib/perl5 \
       /audit-local/bin/cpan-audit \

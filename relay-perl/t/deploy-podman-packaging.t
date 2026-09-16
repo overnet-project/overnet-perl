@@ -168,7 +168,7 @@ is scalar(() = $workflow_text =~ m{config:\s+relay-perl/deploy/podman/syft\.yaml
   'both workflow paths enable the embedded SBOM cataloger';
 for my $required_purl (
   'pkg:cpan/Moo@',
-  'pkg:cpan/Net-Nostr-Core@',
+  'pkg:generic/Net-Nostr-Core@',
   'pkg:cpan/Net-Nostr-Client@',
   'pkg:cpan/Net-Nostr-Relay@',
   'pkg:generic/Overnet-Core@',
@@ -307,6 +307,8 @@ like $containerfile_text, qr{verify-bytes-random-secure-fork\.pl}mx,
 like $containerfile_text,
   qr{generate-perl-sbom\.pl.*--root\s+/runtime-root/opt/overnet/perl5.*--local-metadata\s+/build/core-perl/MYMETA\.json=Overnet.*--local-metadata\s+/build/relay-perl/MYMETA\.json=Overnet::Relay}msx,
   'build inventories CPAN and both local Overnet distributions';
+like $containerfile_text, qr{--local-metadata\s+/build/Net-Nostr-Core-MYMETA[.]json=Net::Nostr::Core}mx,
+  'build inventories the pinned Nostr source installation';
 like $containerfile_text, qr{\bgit-core\b}mx,
   'builder includes git for dependency conformance tests';
 like $containerfile_text, qr{sh\s+/build/core-perl/maint/install-net-nostr[.]sh}mx,

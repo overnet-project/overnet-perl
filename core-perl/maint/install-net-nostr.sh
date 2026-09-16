@@ -18,3 +18,9 @@ tar -xzf "$source_dir/source.tar.gz" -C "$source_dir"
 cpanm "$@" GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz
 cpanm "$@" --reinstall "$source_dir/Net-Nostr-$revision/dist/Net-Nostr-Core" \
   Net::Nostr::Client Net::Nostr::Relay
+
+# Source installs have no CPAN install record; retain metadata for image SBOMs.
+if [ -n "${OVERNET_NOSTR_METADATA_FILE:-}" ]; then
+  cp "$source_dir/Net-Nostr-$revision/dist/Net-Nostr-Core/MYMETA.json" \
+    "$OVERNET_NOSTR_METADATA_FILE"
+fi
