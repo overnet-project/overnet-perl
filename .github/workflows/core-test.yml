@@ -54,15 +54,13 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sh ./core-perl/maint/install-net-nostr.sh --local-lib ~/perl5 --notest
           # --notest: install dependencies without running their own test
           # suites. CI tests core-perl, not its dependencies (which are
           # verified by their own CI); running the full Net::Nostr suite,
           # including its live-relay tests, during install makes a cold
           # cache take tens of minutes.
           cpanm --local-lib ~/perl5 --notest --installdeps ./core-perl
-          # Refresh the split distributions together so a cache cannot mix
-          # pre-split modules with current NIP-01 behavior.
-          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
 
       - name: Run tests
@@ -105,8 +103,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sh ./core-perl/maint/install-net-nostr.sh --local-lib ~/perl5 --notest
           cpanm --local-lib ~/perl5 --notest --installdeps ./core-perl
-          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"

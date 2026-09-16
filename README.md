@@ -17,6 +17,16 @@ The authoritative protocol specification remains in the separate
 
 ## Development
 
+Until Net::Nostr::Core 1.002002 reaches CPAN, install the pinned upstream fix
+before installing the Overnet prerequisites:
+
+```bash
+plx sh core-perl/maint/install-net-nostr.sh --notest
+```
+
+CI and container builds use this same installer. The fix preserves NIP-01
+numeric event fields when JSON::XS is installed.
+
 The machine-local root `.plx` layout selects the shared project Perl and source
 libraries. Because component directories no longer contain nested Git
 repositories, `plx` can discover that layout from any distribution directory.

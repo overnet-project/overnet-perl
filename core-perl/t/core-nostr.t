@@ -126,6 +126,25 @@ subtest 'generate_key and the key wrapper helpers' => sub {
   ok(-s $path, 'save_privkey writes the key');
 };
 
+subtest 'exported signed events preserve wire types through JSON encoders' => sub {
+  my $key = Overnet::Core::Nostr->generate_key;
+  my $created = $key->create_event_hash(
+    kind => 1, created_at => 12, tags => [['t', '123']], content => '456',
+  );
+  my $signed = $key->sign_event_hash(
+    event => {kind => 1, created_at => 12, tags => [['t', '123']], content => '456'},
+  );
+  my $parsed = Overnet::Core::Nostr->event_from_wire($signed)->to_hash;
+  for my $hash ($created, $signed, $parsed) {
+    my $wire = JSON::encode_json($hash);
+    my $event = Overnet::Core::Nostr->event_from_wire($wire);
+    ok $event, 'encoded numeric fields remain numbers';
+    ok $event && $event->validate, 'the original signature still verifies';
+    is $hash->{tags}, [['t', '123']], 'numeric-looking tags retain their string value';
+    is $hash->{content}, '456', 'signed content is unchanged';
+  }
+};
+
 subtest 'event_from_wire parses only valid signed events' => sub {
   my $key    = Overnet::Core::Nostr->generate_key;
   my $signed = $key->sign_event_hash(event => {kind => 1, created_at => 12, tags => [['a', 'b']], content => 'hi'});

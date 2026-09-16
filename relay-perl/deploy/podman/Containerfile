@@ -18,6 +18,7 @@ RUN dnf5 --assumeyes \
       --setopt=install_weak_deps=False \
       install \
         ca-certificates \
+        curl-minimal \
         findutils \
         gcc \
         glibc-devel \
@@ -45,7 +46,7 @@ COPY relay-perl relay-perl
 
 # Crypt::PK::ECC::Schnorr is not indexed under its module name. Dependency
 # tests are intentionally enabled for it and for every normal prerequisite.
-RUN cpanm GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
+RUN sh /build/core-perl/maint/install-net-nostr.sh \
   && cpanm --installdeps /build/core-perl \
   && cd /build/core-perl \
   && perl Makefile.PL \
@@ -56,8 +57,8 @@ RUN cpanm GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
   && perl Makefile.PL \
   && make test \
   && make pure_install \
-  && cpanm --notest --local-lib-contained /runtime-local \
-      GUL/Crypt-PK-ECC-Schnorr-0.01.tar.gz \
+  && sh /build/core-perl/maint/install-net-nostr.sh \
+      --notest --local-lib-contained /runtime-local \
   && cpanm --notest --local-lib-contained /runtime-local \
       --installdeps /build/core-perl \
   && cd /build/core-perl \

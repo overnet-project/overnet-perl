@@ -52,9 +52,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sh ./core-perl/maint/install-net-nostr.sh --local-lib ~/perl5 --notest
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./adapter-irc-perl
-          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
 
       - name: Run tests
@@ -92,9 +92,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sh ./core-perl/maint/install-net-nostr.sh --local-lib ~/perl5 --notest
           cpanm --local-lib ~/perl5 --installdeps ./core-perl
           cpanm --local-lib ~/perl5 --installdeps ./adapter-irc-perl
-          cpanm --local-lib ~/perl5 --notest --reinstall Net::Nostr::Core Net::Nostr::Client Net::Nostr::Relay
           cpanm --local-lib ~/perl5 --notest ./overnet-perl-style
           cpanm --local-lib ~/perl5 --notest Devel::Cover
           echo "$HOME/perl5/bin" >> "$GITHUB_PATH"

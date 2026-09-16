@@ -43,6 +43,7 @@ is(
     'JSON::Schema::Modern' => 0,
     'Moo'                  => 0,
     'Net::Nostr'           => 0,
+    'Net::Nostr::Core'     => '1.002002',
     'URI'                  => 0,
     'strictures'           => 2,
   },

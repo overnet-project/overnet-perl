@@ -309,8 +309,8 @@ like $containerfile_text,
   'build inventories CPAN and both local Overnet distributions';
 like $containerfile_text, qr{\bgit-core\b}mx,
   'builder includes git for dependency conformance tests';
-like $containerfile_text, qr{Crypt-PK-ECC-Schnorr}mx,
-  'Containerfile pre-installs the unindexed Schnorr dist Net::Nostr::Core needs';
+like $containerfile_text, qr{sh\s+/build/core-perl/maint/install-net-nostr[.]sh}mx,
+  'Containerfile pre-installs the pinned Net::Nostr distributions and Schnorr prerequisite';
 like $containerfile_text, qr{\bgmp-devel\b}mx,
   'builder installs gmp-devel for Math::GMPz';
 like $containerfile_text, qr{dnf5\s+--installroot=/runtime-root}mx,
