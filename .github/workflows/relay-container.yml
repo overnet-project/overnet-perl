@@ -83,7 +83,7 @@ jobs:
         run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:generic/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
 
       - name: Upload the validated SPDX SBOM
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: overnet-relay-${{ github.sha }}-sbom
           path: ${{ runner.temp }}/overnet-relay.spdx.json
@@ -245,7 +245,7 @@ jobs:
         run: relay-perl/deploy/podman/validate-sbom.pl --require-purl-prefix pkg:cpan/Moo@ --require-purl-prefix pkg:generic/Net-Nostr-Core@ --require-purl-prefix pkg:cpan/Net-Nostr-Client@ --require-purl-prefix pkg:cpan/Net-Nostr-Relay@ --require-purl-prefix pkg:generic/Overnet-Core@ --require-purl-prefix pkg:generic/Overnet-Relay@ "$RUNNER_TEMP/overnet-relay.spdx.json"
 
       - name: Upload the validated published SPDX SBOM
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: overnet-relay-${{ github.sha }}-sbom
           path: ${{ runner.temp }}/overnet-relay.spdx.json
